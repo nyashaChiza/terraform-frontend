@@ -1,5 +1,6 @@
 export type AuthState = {
   token?: string | null;
+  token_type?: string | null;
   user?: any | null;
 };
 
