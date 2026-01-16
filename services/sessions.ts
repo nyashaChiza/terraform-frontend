@@ -30,4 +30,16 @@ export async function getPlannedSessions() {
   return { ok: true, status: res.status, body };
 }
 
-export default { getPlannedSessions };
+export async function getCompletedSessions() {
+  const auth = await buildAuthHeader();
+  const res = await fetch(`${BASE_URL}/api/sessions/completed`, {
+    method: 'GET',
+    headers: { 'Accept': 'application/json', ...auth },
+  });
+
+  const body = await parseResponse(res);
+  if (!res.ok) return { ok: false, status: res.status, body };
+  return { ok: true, status: res.status, body };
+}
+
+export default { getPlannedSessions, getCompletedSessions };

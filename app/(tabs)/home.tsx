@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, FlatList } from 'react-native';
 import { getProfile, createProfile } from '../../services/profiles';
-import { getPlannedSessions } from '../../services/sessions';
+import { getPlannedSessions, getCompletedSessions } from '../../services/sessions';
 import { generatePlan } from '../../services/planner';
 import ProfileSheet from '../../components/ProfileSheet';
 import GoalSheet from '../../components/GoalSheet';
@@ -9,19 +9,30 @@ import { authStore } from '../../store/auth';
 import { ProfileStore } from 'store/profile';
 
 type Session = {
-  id: string;
-  title: string;
-  duration: string;
-  completedAt: string;
+  id: number;
+  planned_session_id: number;
+  actual_date: string;
+  completed: boolean;
+  created: string;
+  updated: string;
+  exercises: any[];
+  feedback: {
+    soreness_per_muscle: Record<string, number>;
+    joint_pain: boolean;
+    effort_rating: number;
+    energy_level: number;
+    summary: string;
+    id: number;
+    logged_session_id: number;
+    created: string;
+    updated: string;
+  };
 };
 
 // planned session fetched from API
-  
 
-const completedSessions: Session[] = [
-  { id: '1', title: 'Leg Day', duration: '50 min', completedAt: 'Yesterday' },
-  { id: '2', title: 'Core & Mobility', duration: '30 min', completedAt: '2 days ago' },
-];
+
+const completedSessionsPlaceholder: Session[] = [];
 
 export default function HomeTab() {
   const [profileSheetVisible, setProfileSheetVisible] = useState(false);
@@ -29,6 +40,7 @@ export default function HomeTab() {
   const [initialProfileValues, setInitialProfileValues] = useState<any>(null);
   const [displayName, setDisplayName] = useState<string>('');
   const [plannedSession, setPlannedSession] = useState<any | null>(null);
+  const [completedSessions, setCompletedSessions] = useState<Session[]>([]);
 
   useEffect(() => {
     let mounted = true;
@@ -77,6 +89,25 @@ export default function HomeTab() {
     };
 
     loadPlanned();
+    return () => { mounted = false; };
+  }, []);
+
+  // Fetch completed sessions
+  useEffect(() => {
+    let mounted = true;
+
+    const loadCompletedSessions = async () => {
+      const res = await getCompletedSessions();
+      if (!mounted) return;
+      if (res.ok && Array.isArray(res.body)) {
+        setCompletedSessions(res.body);
+      } else {
+        console.warn('Failed to fetch completed sessions:', res);
+        setCompletedSessions(completedSessionsPlaceholder);
+      }
+    };
+
+    loadCompletedSessions();
     return () => { mounted = false; };
   }, []);
 
@@ -193,13 +224,19 @@ export default function HomeTab() {
       <Text className="text-white text-lg font-bold mb-4">Completed Sessions</Text>
       <FlatList
         data={completedSessions}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.id.toString()}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
         renderItem={({ item }) => (
           <View className="bg-white/95 rounded-2xl p-4 mb-3">
-            <Text className="font-bold text-violet-800">{item.title}</Text>
-            <Text className="text-gray-500">{item.duration} • {item.completedAt}</Text>
+            <Text className="font-bold text-violet-800">Session #{item.id}</Text>
+            <Text className="text-gray-500 text-xs mt-1">
+              {new Date(item.actual_date).toLocaleDateString()} • Effort: {item.feedback?.effort_rating}/10
+            </Text>
+            {item.feedback?.summary && (
+              <Text className="text-gray-600 text-sm mt-2">{item.feedback.summary}</Text>
+            )}
+            <Text className="text-green-600 text-xs mt-2">✓ Completed</Text>
           </View>
         )}
       />
