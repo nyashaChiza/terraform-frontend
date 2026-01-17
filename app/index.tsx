@@ -14,7 +14,7 @@ export default function Splash() {
 
   return (
     <ImageBackground
-      source={require('../assets/splash.png')}
+      source={require('../assets/splash.jpg')}
       style={styles.container}
       resizeMode="cover"
     />
