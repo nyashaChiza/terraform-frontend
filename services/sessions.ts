@@ -20,13 +20,14 @@ async function parseResponse(res: Response) {
 
 export async function getPlannedSessions() {
   const auth = await buildAuthHeader();
-  const res = await fetch(`${BASE_URL}/api/sessions/planned`, {
+  const res = await fetch(`${BASE_URL}/api/sessions/latest`, {
     method: 'GET',
-    headers: { 'Accept': 'application/json', ...auth },
+    headers: { 'Accept': 'application/json', ...auth } as HeadersInit,
   });
 
   const body = await parseResponse(res);
   if (!res.ok) return { ok: false, status: res.status, body };
+  if (!body || body.detail) return { ok: false, status: res.status, body: null };
   return { ok: true, status: res.status, body };
 }
 
@@ -42,4 +43,28 @@ export async function getCompletedSessions() {
   return { ok: true, status: res.status, body };
 }
 
-export default { getPlannedSessions, getCompletedSessions };
+export async function startSession(sessionId: number) {
+  const auth = await buildAuthHeader();
+  const res = await fetch(`${BASE_URL}/api/sessions/${sessionId}/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', ...auth },
+    // Remove body - session_id is in the URL path
+  });
+  const body = await parseResponse(res);
+  if (!res.ok) return { ok: false, status: res.status, body };
+  return { ok: true, status: res.status, body };
+}
+
+export async function completeSession(sessionId: number, feedback?: any) {
+  const auth = await buildAuthHeader();
+  const res = await fetch(`${BASE_URL}/api/sessions/${sessionId}/complete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', ...auth },
+    // Only include body if there's feedback
+    ...(feedback && { body: JSON.stringify({ feedback }) }),
+  });
+  const body = await parseResponse(res);
+  if (!res.ok) return { ok: false, status: res.status, body };
+  return { ok: true, status: res.status, body };
+}
+export default { getPlannedSessions, getCompletedSessions, startSession, completeSession };

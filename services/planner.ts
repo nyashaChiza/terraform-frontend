@@ -27,13 +27,12 @@ async function buildAuthHeader() {
   return { Authorization: headerValue };
 }
 
-export async function generatePlan(planned_date: string) {
+export async function generatePlan() {
   const auth = await buildAuthHeader();
   const res = await fetch(`${BASE_URL}/api/planner/generate`, {
-    method: 'POST',
+    method: 'GET',
     headers: { 'Content-Type': 'application/json', ...auth },
-    body: JSON.stringify({ planned_date }),
-  });
+    });
 
   const text = await res.text();
   try {

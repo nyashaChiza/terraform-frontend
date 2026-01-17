@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable, FlatList } from 'react-native';
+import { View, Text, Pressable, FlatList, RefreshControl } from 'react-native';
+import { useRouter } from 'expo-router';
 import { getProfile, createProfile } from '../../services/profiles';
 import { getPlannedSessions, getCompletedSessions } from '../../services/sessions';
 import { generatePlan } from '../../services/planner';
@@ -7,14 +8,17 @@ import ProfileSheet from '../../components/ProfileSheet';
 import GoalSheet from '../../components/GoalSheet';
 import { authStore } from '../../store/auth';
 import { ProfileStore } from 'store/profile';
+import { showError, showSuccess } from '../../services/toast';
 
 type Session = {
   id: number;
-  planned_session_id: number;
+  session_id: number;
+  status: string;
   actual_date: string;
   completed: boolean;
   created: string;
   updated: string;
+  title: string;
   exercises: any[];
   feedback: {
     soreness_per_muscle: Record<string, number>;
@@ -29,101 +33,111 @@ type Session = {
   };
 };
 
-// planned session fetched from API
-
-
 const completedSessionsPlaceholder: Session[] = [];
 
 export default function HomeTab() {
+  const router = useRouter();
   const [profileSheetVisible, setProfileSheetVisible] = useState(false);
   const [checkingProfile, setCheckingProfile] = useState(false);
   const [initialProfileValues, setInitialProfileValues] = useState<any>(null);
   const [displayName, setDisplayName] = useState<string>('');
   const [plannedSession, setPlannedSession] = useState<any | null>(null);
   const [completedSessions, setCompletedSessions] = useState<Session[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [goalSheetVisible, setGoalSheetVisible] = useState(false);
 
-  useEffect(() => {
-    let mounted = true;
-
-    const loadProfile = async () => {
+  // Centralized data loading function
+  const loadHomeData = async (showRefreshIndicator = false) => {
+    if (showRefreshIndicator) {
+      setRefreshing(true);
+    } else {
       setCheckingProfile(true);
+    }
 
-      // 1️⃣ Let home screen breathe for 1 second
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      if (!mounted) return;
-
-      const res = await getProfile();
-
-      if (res.ok) {
-        authStore.set({ user: res.body });
-        setInitialProfileValues(res.body);
-        const first = res.body.first_name ?? res.body.firstName ?? res.body.first ?? '';
-        const last = res.body.last_name ?? res.body.lastName ?? res.body.last ?? '';
+    try {
+      // Load profile
+      const profileRes = await getProfile();
+      
+      if (profileRes.ok) {
+        authStore.set({ user: profileRes.body });
+        setInitialProfileValues(profileRes.body);
+        const first = profileRes.body.first_name ?? profileRes.body.firstName ?? profileRes.body.first ?? '';
+        const last = profileRes.body.last_name ?? profileRes.body.lastName ?? profileRes.body.last ?? '';
         setDisplayName([first, last].filter(Boolean).join(' '));
         ProfileStore.set({
           first_name: first,
           last_name: last,
-          gender: res.body.gender,
-          height: res.body.height,
-          weight: res.body.weight
+          gender: profileRes.body.gender,
+          height: profileRes.body.height,
+          weight: profileRes.body.weight
         });
-      } else if (res.status === 404) {
-        setProfileSheetVisible(true); // show profile sheet if not found
+      } else if (profileRes.status === 404) {
+        setProfileSheetVisible(true);
       } else {
-        console.warn('Profile fetch failed:', res);
+        console.warn('Profile fetch failed:', profileRes);
       }
 
-      setCheckingProfile(false);
-    };
-
-    loadProfile();
-    // fetch planned session as well
-    const loadPlanned = async () => {
-      const res = await getPlannedSessions();
-      if (!mounted) return;
-      if (res.ok && Array.isArray(res.body) && res.body.length > 0) {
-        const first = res.body[0];
-        if (!first.title) first.title = 'test';
-        setPlannedSession(first);
+      // Load planned sessions
+      const plannedRes = await getPlannedSessions();
+      if (plannedRes.body && plannedRes.body.detail != 'No planned sessions found') {
+        const session = plannedRes.body;
+        console.log('Planned session loaded:', session);
+        setPlannedSession(session);
+      } else {
+        setPlannedSession(null);
       }
-    };
 
-    loadPlanned();
-    return () => { mounted = false; };
-  }, []);
+      // Load completed sessions
+      const completedRes = await getCompletedSessions();
+      if (completedRes.ok && Array.isArray(completedRes.body)) {
+        setCompletedSessions(completedRes.body);
+      } else {
+        console.warn('Failed to fetch completed sessions:', completedRes);
+        setCompletedSessions(completedSessionsPlaceholder);
+      }
+    } catch (error) {
+      console.error('Error loading home data:', error);
+    } finally {
+      if (showRefreshIndicator) {
+        setRefreshing(false);
+      } else {
+        setCheckingProfile(false);
+      }
+    }
+  };
 
-  // Fetch completed sessions
+  // Initial load
   useEffect(() => {
     let mounted = true;
 
-    const loadCompletedSessions = async () => {
-      const res = await getCompletedSessions();
+    const initialLoad = async () => {
+      setCheckingProfile(true);
+      // Let home screen breathe for 1 second
+      await new Promise(resolve => setTimeout(resolve, 1000));
       if (!mounted) return;
-      if (res.ok && Array.isArray(res.body)) {
-        setCompletedSessions(res.body);
-      } else {
-        console.warn('Failed to fetch completed sessions:', res);
-        setCompletedSessions(completedSessionsPlaceholder);
-      }
+      
+      await loadHomeData(false);
     };
 
-    loadCompletedSessions();
+    initialLoad();
     return () => { mounted = false; };
   }, []);
 
-  // ✅ This will be passed to ProfileSheet
+  // Refresh handler for pull-to-refresh
+  const onRefresh = async () => {
+    await loadHomeData(true);
+  };
+
   const onProfileSubmit = async (payload: any) => {
     try {
-      // Decide if creating or updating
       const existingUser = authStore.get().user;
       let res;
       if (existingUser) {
-        // Update flow (call your updateProfile service if exists)
-        // res = await updateProfile(payload);
         console.log('Updating profile', payload);
-        res = { ok: true, body: payload }; // placeholder
+        res = { ok: true, body: payload };
       } else {
-        res = await createProfile(payload); // create new profile
+        res = await createProfile(payload);
       }
 
       if (res.ok) {
@@ -134,28 +148,19 @@ export default function HomeTab() {
         throw new Error(JSON.stringify(res.body));
       }
     } catch (err: any) {
-      throw err; // ProfileSheet will handle toast
+      throw err;
     }
   };
-
-  const [generating, setGenerating] = useState(false);
 
   const onGenerateSession = async () => {
     setGenerating(true);
     try {
-      const d = new Date();
-      d.setDate(d.getDate() + 2);
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      const planned_date = `${yyyy}-${mm}-${dd}`;
-
-      const res = await generatePlan(planned_date);
+      const res = await generatePlan();
       if (res.ok) {
         console.log('Generated plan:', res.body);
-        // You may want to navigate to the plan or store it
+        // Refresh data to show new plan
+        await loadHomeData(false);
       } else if (res?.body?.detail === 'User has no goals') {
-        // show goal creation sheet
         setGoalSheetVisible(true);
       } else {
         console.warn('Generate failed', res);
@@ -167,78 +172,109 @@ export default function HomeTab() {
     }
   };
 
-  const [goalSheetVisible, setGoalSheetVisible] = useState(false);
-
   const handleGoalCreated = async (goal: any) => {
     setGoalSheetVisible(false);
-    // After creating a goal, re-run generation
     setGenerating(true);
     try {
-      const d = new Date();
-      d.setDate(d.getDate() + 2);
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      const planned_date = `${yyyy}-${mm}-${dd}`;
-      const res = await generatePlan(planned_date);
+      const res = await generatePlan();
       console.log('Re-generated plan after goal creation:', res);
+      // Refresh data to show new plan
+      await loadHomeData(false);
     } finally {
       setGenerating(false);
     }
   };
 
   return (
-    <View className="flex-1 bg-violet-700 px-5 pt-14">
-      {/* Greeting */}
-      <Text className="text-white text-3xl font-extrabold">
-        Hie {displayName ? displayName : '👋'}
-      </Text>
-      <Text className="text-violet-200 mb-8">
-        Ready for your next session?
-      </Text>
-
-      {/* Planned Session */}
-      {plannedSession ? (
-        <View className="bg-white rounded-3xl p-6 mb-6">
-          <Text className="text-xs text-gray-400 uppercase mb-1">Planned Session</Text>
-          <Text className="text-2xl font-extrabold text-violet-800">{plannedSession.title ?? 'test'}</Text>
-          <Text className="text-gray-500 mt-3">⏱ {plannedSession.duration ?? '45 min'}</Text>
-        </View>
-      ) : (
-        <View className="bg-white rounded-3xl p-6 mb-6">
-          <Text className="text-xl font-extrabold text-violet-800 mb-2">No planned session</Text>
-          <Text className="text-gray-500 mb-5">
-            Generate a personalized workout plan for today
-          </Text>
-          <Pressable onPress={onGenerateSession} className="bg-violet-700 py-4 rounded-2xl items-center">
-            {generating ? (
-              <Text className="text-white font-bold text-base">Generating...</Text>
-            ) : (
-              <Text className="text-white font-bold text-base">Generate Session</Text>
-            )}
-          </Pressable>
-        </View>
-      )}
-
-      {/* Completed Sessions */}
-      <Text className="text-white text-lg font-bold mb-4">Completed Sessions</Text>
+    <View className="flex-1 bg-violet-700">
       <FlatList
         data={completedSessions}
         keyExtractor={(item) => item.id.toString()}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
-        renderItem={({ item }) => (
-          <View className="bg-white/95 rounded-2xl p-4 mb-3">
-            <Text className="font-bold text-violet-800">Session #{item.id}</Text>
-            <Text className="text-gray-500 text-xs mt-1">
-              {new Date(item.actual_date).toLocaleDateString()} • Effort: {item.feedback?.effort_rating}/10
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#ffffff"
+            colors={['#7c3aed']}
+          />
+        }
+        ListHeaderComponent={
+          <View className="px-5 pt-14">
+            {/* Greeting */}
+            <Text className="text-white text-3xl font-extrabold">
+              Hie {displayName ? displayName : '👋'}
             </Text>
-            {item.feedback?.summary && (
-              <Text className="text-gray-600 text-sm mt-2">{item.feedback.summary}</Text>
+            <Text className="text-violet-200 mb-8">
+              Ready for your next session?
+            </Text>
+
+            {/* Planned Session */}
+            {plannedSession ? (
+              <Pressable
+                onPress={() => {
+                  router.push({
+                    pathname: '/(tabs)/session-details',
+                    params: { session: JSON.stringify(plannedSession) },
+                  });
+                }}
+                className="bg-white rounded-3xl p-6 mb-6"
+              >
+                <Text className="text-xs text-gray-400 uppercase mb-1">Planned Session</Text>
+                <Text className="text-2xl font-extrabold text-violet-800">{plannedSession.title}</Text>
+                <Text className="text-gray-500 mt-3">⏱ {plannedSession.duration ?? '45 min'}</Text>
+              </Pressable>
+            ) : (
+              <View className="bg-white rounded-3xl p-6 mb-6">
+                <Text className="text-xl font-extrabold text-violet-800 mb-2">No planned session</Text>
+                <Text className="text-gray-500 mb-5">
+                  Generate a personalized workout plan for today
+                </Text>
+                <Pressable onPress={onGenerateSession} className="bg-violet-700 py-4 rounded-2xl items-center">
+                  {generating ? (
+                    <Text className="text-white font-bold text-base">Generating...</Text>
+                  ) : (
+                    <Text className="text-white font-bold text-base">Generate Session</Text>
+                  )}
+                </Pressable>
+              </View>
             )}
-            <Text className="text-green-600 text-xs mt-2">✓ Completed</Text>
+
+            {/* Completed Sessions Header */}
+            <Text className="text-white text-lg font-bold mb-4">Completed Sessions</Text>
           </View>
-        )}
+        }
+        renderItem={({ item }) => {
+          const title = item.plan_payload?.title || item.title || `Session #${item.id}`;
+          const summary = item.plan_payload?.summary || item.summary || '';
+          const date = item.updated || item.created || item.actual_date;
+          const status = item.status;
+          const dateLabel = date ? new Date(date).toLocaleDateString() : '';
+          const duration = item.plan_payload?.estimated_duration_minutes ?? item.estimated_duration_minutes;
+          const exercisesCount = item.plan_payload?.exercises?.length ?? item.exercises?.length ?? 0;
+
+          return (
+            <Pressable
+              onPress={() => {
+                router.push({
+                  pathname: '/(tabs)/session-details',
+                  params: { session: JSON.stringify(item) },
+                });
+              }}
+              className="bg-white/95 rounded-2xl p-4 mb-3 mx-5"
+            >
+              <Text className="font-bold text-violet-800">{title}</Text>
+              <Text className="text-gray-500 text-xs mt-1">
+                {dateLabel} {duration ? `• ${duration} min` : ''} {exercisesCount ? `• ${exercisesCount} exercises` : ''}
+              </Text>
+              {summary ? (
+                <Text className="text-gray-600 text-sm mt-2">{summary}</Text>
+              ) : null}
+              <Text className="text-green-600 text-xs mt-2">✓ {status}</Text>
+            </Pressable>
+          );
+        }}
       />
 
       {/* Profile Sheet */}
