@@ -5,6 +5,7 @@ import {
   TextInput,
   Pressable,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -28,8 +29,13 @@ export default function Login() {
     setLoading(true);
     try {
       const res = await loginSvc({ email, password });
-      const token = res?.access_token ?? res?.token ?? res?.accessToken ?? null;
-      const token_type = (res?.token_type ?? res?.tokenType ?? 'Bearer');
+      const token =
+        res?.access_token ??
+        res?.token ??
+        res?.accessToken ??
+        null;
+
+      const token_type = res?.token_type ?? res?.tokenType ?? 'Bearer';
       const user = res?.user ?? null;
 
       if (!token) {
@@ -49,6 +55,19 @@ export default function Login() {
 
   return (
     <View className="flex-1 bg-violet-700 justify-center px-6">
+      {/* Logo */}
+      <View className="items-center mb-8">
+        <Image
+          source={require('../../assets/icon.png')}
+          className="w-24 h-24"
+          resizeMode="contain"
+        />
+        {/* Optional app name */}
+        <Text className="text-white font-extrabold text-xl mt-3 ">
+          TerraForm
+        </Text>
+      </View>
+
       {/* Card */}
       <View className="bg-white rounded-3xl px-6 py-8 shadow-lg">
         <Text className="text-3xl font-extrabold text-violet-800 mb-1">
@@ -64,6 +83,7 @@ export default function Login() {
           value={email}
           onChangeText={setEmail}
           autoCapitalize="none"
+          keyboardType="email-address"
           className="border border-gray-300 rounded-xl px-4 py-3 mb-3 text-base"
         />
 
@@ -79,7 +99,7 @@ export default function Login() {
         <Pressable
           onPress={onLogin}
           disabled={loading}
-          className="bg-violet-700 py-4 rounded-xl items-center"
+          className="bg-violet-700 py-4 rounded-xl items-center mb-3"
         >
           {loading ? (
             <ActivityIndicator color="#fff" />
@@ -89,9 +109,17 @@ export default function Login() {
             </Text>
           )}
         </Pressable>
-      </View>
 
-     
+        <Pressable
+          onPress={() => router.push('/(auth)/register')}
+          disabled={loading}
+          className="bg-violet-100 py-4 rounded-xl items-center"
+        >
+          <Text className="text-violet-700 font-bold text-base">
+            Create Account
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
