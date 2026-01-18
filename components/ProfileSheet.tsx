@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { showError, showSuccess } from '../services/toast';
@@ -47,7 +48,7 @@ export default function ProfileSheet({
     weight: 0,
     date_of_birth: '',
     experience_level: 'Beginner',
-    preferred_sessions_per_week: 1,
+    preferred_sessions_per_week: 3,
     phone_number: '',
   });
   const [loading, setLoading] = useState(false);
@@ -96,129 +97,278 @@ export default function ProfileSheet({
     }
   };
 
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+    
+    if (selectedDate) {
+      const yyyy = selectedDate.getFullYear();
+      const mm = String(selectedDate.getMonth() + 1).padStart(2, '0');
+      const dd = String(selectedDate.getDate()).padStart(2, '0');
+      update('date_of_birth', `${yyyy}-${mm}-${dd}`);
+    }
+  };
+
+  const closeDatePicker = () => {
+    setShowDatePicker(false);
+  };
+
+  const GenderButton = ({ value, label }: { value: string; label: string }) => (
+    <Pressable
+      onPress={() => update('gender', value)}
+      className={`flex-1 py-3 rounded-xl border-2 ${
+        form.gender === value
+          ? 'bg-violet-700 border-violet-700'
+          : 'bg-white border-gray-300'
+      }`}
+    >
+      <Text
+        className={`text-center font-semibold ${
+          form.gender === value ? 'text-white' : 'text-gray-700'
+        }`}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+
+  const ExperienceButton = ({ value, label }: { value: string; label: string }) => (
+    <Pressable
+      onPress={() => update('experience_level', value)}
+      className={`flex-1 py-3 rounded-xl border-2 ${
+        form.experience_level === value
+          ? 'bg-violet-700 border-violet-700'
+          : 'bg-white border-gray-300'
+      }`}
+    >
+      <Text
+        className={`text-center font-semibold text-sm ${
+          form.experience_level === value ? 'text-white' : 'text-gray-700'
+        }`}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+
+  const SessionButton = ({ value }: { value: number }) => (
+    <Pressable
+      onPress={() => update('preferred_sessions_per_week', value)}
+      className={`w-12 h-12 rounded-xl border-2 items-center justify-center ${
+        form.preferred_sessions_per_week === value
+          ? 'bg-violet-700 border-violet-700'
+          : 'bg-white border-gray-300'
+      }`}
+    >
+      <Text
+        className={`font-bold text-lg ${
+          form.preferred_sessions_per_week === value ? 'text-white' : 'text-gray-700'
+        }`}
+      >
+        {value}
+      </Text>
+    </Pressable>
+  );
+
   return (
     <Modal visible={visible} transparent animationType="slide">
-      <View className="flex-1 bg-black/40 justify-end">
-        <View className="h-[60%] bg-white rounded-t-3xl px-6 pt-6">
-          <Text className="text-2xl font-extrabold text-violet-800 mb-2">
-            {mode === 'create' ? 'Complete your profile' : 'Edit profile'}
-          </Text>
-          <Text className="text-gray-500 mb-4">
-            This helps us personalize your workouts
-          </Text>
-
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {/* First name */}
-            <TextInput
-              placeholder="First name"
-              placeholderTextColor="#374151"
-              value={form.first_name}
-              onChangeText={v => update('first_name', v)}
-              className="border border-gray-300 rounded-xl px-4 py-3 mb-3"
-            />
-
-            {/* Last name */}
-            <TextInput
-              placeholder="Last name"
-              placeholderTextColor="#374151"
-              value={form.last_name}
-              onChangeText={v => update('last_name', v)}
-              className="border border-gray-300 rounded-xl px-4 py-3 mb-3"
-            />
-
-            {/* Phone */}
-            <TextInput
-              placeholder="Phone number"
-              placeholderTextColor="#374151"
-              value={form.phone_number}
-              onChangeText={v => update('phone_number', v)}
-              className="border border-gray-300 rounded-xl px-4 py-3 mb-3"
-            />
-
-            {/* Date of birth */}
-            <Pressable
-              onPress={() => setShowDatePicker(true)}
-              className="border border-gray-300 rounded-xl px-4 py-3 mb-3"
-            >
-              <Text
-                className={`text-base ${
-                  form.date_of_birth ? 'text-black' : 'text-gray-400'
-                }`}
-              >
-                {form.date_of_birth || 'Date of birth'}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        className="flex-1"
+      >
+        <Pressable className="flex-1 bg-black/40" onPress={closeDatePicker}>
+          <View className="flex-1" />
+          <View className="bg-white rounded-t-3xl">
+            {/* Header */}
+            <View className="px-6 pt-6 pb-4 border-b border-gray-100">
+              <Text className="text-2xl font-extrabold text-violet-800">
+                {mode === 'create' ? 'Complete your profile' : 'Edit profile'}
               </Text>
-            </Pressable>
+              <Text className="text-gray-500 mt-1">
+                This helps us personalize your workouts
+              </Text>
+            </View>
 
-            {showDatePicker && (
-              <DateTimePicker
-                value={parseDate(form.date_of_birth)}
-                mode="date"
-                textColor='#374151'
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                maximumDate={new Date()}
-                onChange={(_, selectedDate) => {
-                  setShowDatePicker(Platform.OS === 'ios');
-                  if (selectedDate) {
-                    const yyyy = selectedDate.getFullYear();
-                    const mm = String(selectedDate.getMonth() + 1).padStart(
-                      2,
-                      '0'
-                    );
-                    const dd = String(selectedDate.getDate()).padStart(2, '0');
-                    update('date_of_birth', `${yyyy}-${mm}-${dd}`);
-                  }
-                }}
-              />
-            )}
-
-            {/* Height */}
-            <TextInput
-              placeholder="Height (cm)"
-              placeholderTextColor="#374151"
-              keyboardType="numeric"
-              value={form.height ? String(form.height) : ''}
-              onChangeText={v => update('height', Number(v))}
-              className="border border-gray-300 rounded-xl px-4 py-3 mb-3"
-            />
-
-            {/* Weight */}
-            <TextInput
-              placeholder="Weight (kg)"
-              placeholderTextColor="#374151"
-              keyboardType="numeric"
-              value={form.weight ? String(form.weight) : ''}
-              onChangeText={v => update('weight', Number(v))}
-              className="border border-gray-300 rounded-xl px-4 py-3 mb-3"
-            />
-
-            {/* Sessions per week */}
-            <TextInput
-              placeholder="Sessions per week"
-              keyboardType="numeric"
-              value={String(form.preferred_sessions_per_week)}
-              onChangeText={v =>
-                update('preferred_sessions_per_week', Number(v))
-              }
-              className="border border-gray-300 rounded-xl px-4 py-3 mb-6"
-            />
-
-            {/* Submit button */}
-            <Pressable
-              onPress={onSubmit}
-              disabled={loading}
-              className="bg-violet-700 py-4 rounded-2xl items-center mb-8"
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 40 }}
+              className="px-6"
             >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text className="text-white font-bold text-base">
-                  {mode === 'create' ? 'Save Profile' : 'Update Profile'}
+              {/* Name Fields */}
+              <View className="mt-5">
+                <Text className="text-gray-700 font-semibold mb-2 text-sm">
+                  Full Name
                 </Text>
-              )}
-            </Pressable>
-          </ScrollView>
-        </View>
-      </View>
+                <View className="flex-row gap-3">
+                  <TextInput
+                    placeholder="First name"
+                    placeholderTextColor="#9ca3af"
+                    value={form.first_name}
+                    onChangeText={v => update('first_name', v)}
+                    className="flex-1 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                  />
+                  <TextInput
+                    placeholder="Last name"
+                    placeholderTextColor="#9ca3af"
+                    value={form.last_name}
+                    onChangeText={v => update('last_name', v)}
+                    className="flex-1 border border-gray-300 rounded-xl px-4 py-3 text-base"
+                  />
+                </View>
+              </View>
+
+              {/* Phone */}
+              <View className="mt-5">
+                <Text className="text-gray-700 font-semibold mb-2 text-sm">
+                  Phone Number
+                </Text>
+                <TextInput
+                  placeholder="+230 5xxx xxxx"
+                  placeholderTextColor="#9ca3af"
+                  value={form.phone_number}
+                  onChangeText={v => update('phone_number', v)}
+                  keyboardType="phone-pad"
+                  className="border border-gray-300 rounded-xl px-4 py-3 text-base"
+                />
+              </View>
+
+              {/* Date of Birth */}
+              <View className="mt-5">
+                <Text className="text-gray-700 font-semibold mb-2 text-sm">
+                  Date of Birth
+                </Text>
+                <Pressable
+                  onPress={() => setShowDatePicker(true)}
+                  className="border border-gray-300 rounded-xl px-4 py-3 bg-white"
+                >
+                  <Text
+                    className={`text-base ${
+                      form.date_of_birth ? 'text-gray-900' : 'text-gray-400'
+                    }`}
+                  >
+                    {form.date_of_birth
+                      ? new Date(form.date_of_birth).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                        })
+                      : 'Select date'}
+                  </Text>
+                </Pressable>
+
+                {showDatePicker && (
+                  <View>
+                    <DateTimePicker
+                      value={parseDate(form.date_of_birth)}
+                      mode="date"
+                      textColor='#374151'
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      maximumDate={new Date()}
+                      onChange={handleDateChange}
+                    />
+                    {Platform.OS === 'ios' && (
+                      <Pressable
+                        onPress={closeDatePicker}
+                        className="bg-violet-700 py-3 rounded-xl items-center mt-2"
+                      >
+                        <Text className="text-white font-semibold">Done</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                )}
+              </View>
+
+              {/* Gender */}
+              <View className="mt-5">
+                <Text className="text-gray-700 font-semibold mb-2 text-sm">
+                  Gender
+                </Text>
+                <View className="flex-row gap-2">
+                  <GenderButton value="Male" label="Male" />
+                  <GenderButton value="Female" label="Female" />
+                  <GenderButton value="Other" label="Other" />
+                </View>
+              </View>
+
+              {/* Height & Weight */}
+              <View className="mt-5">
+                <Text className="text-gray-700 font-semibold mb-2 text-sm">
+                  Physical Stats
+                </Text>
+                <View className="flex-row gap-3">
+                  <View className="flex-1">
+                    <TextInput
+                      placeholder="Height"
+                      placeholderTextColor="#9ca3af"
+                      keyboardType="numeric"
+                      value={form.height ? String(form.height) : ''}
+                      onChangeText={v => update('height', Number(v) || 0)}
+                      className="border border-gray-300 rounded-xl px-4 py-3 text-base"
+                    />
+                    <Text className="text-gray-500 text-xs mt-1 ml-1">
+                      in centimeters
+                    </Text>
+                  </View>
+                  <View className="flex-1">
+                    <TextInput
+                      placeholder="Weight"
+                      placeholderTextColor="#9ca3af"
+                      keyboardType="numeric"
+                      value={form.weight ? String(form.weight) : ''}
+                      onChangeText={v => update('weight', Number(v) || 0)}
+                      className="border border-gray-300 rounded-xl px-4 py-3 text-base"
+                    />
+                    <Text className="text-gray-500 text-xs mt-1 ml-1">
+                      in kilograms
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Experience Level */}
+              <View className="mt-5">
+                <Text className="text-gray-700 font-semibold mb-2 text-sm">
+                  Experience Level
+                </Text>
+                <View className="flex-row gap-2">
+                  <ExperienceButton value="Beginner" label="Beginner" />
+                  <ExperienceButton value="Intermediate" label="Intermediate" />
+                  <ExperienceButton value="Advanced" label="Advanced" />
+                </View>
+              </View>
+
+              {/* Sessions per week */}
+              <View className="mt-5 mb-6">
+                <Text className="text-gray-700 font-semibold mb-2 text-sm">
+                  Preferred Sessions per Week
+                </Text>
+                <View className="flex-row gap-2 justify-between">
+                  {[1, 2, 3, 4, 5, 6, 7].map(num => (
+                    <SessionButton key={num} value={num} />
+                  ))}
+                </View>
+              </View>
+
+              {/* Submit button */}
+              <Pressable
+                onPress={onSubmit}
+                disabled={loading}
+                className="bg-violet-700 py-4 rounded-2xl items-center mb-4 shadow-lg"
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text className="text-white font-bold text-base">
+                    {mode === 'create' ? 'Save Profile' : 'Update Profile'}
+                  </Text>
+                )}
+              </Pressable>
+            </ScrollView>
+          </View>
+        </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

@@ -82,7 +82,6 @@ export default function HomeTab() {
       const plannedRes = await getPlannedSessions();
       if (plannedRes.body && plannedRes.body.detail != 'No planned sessions found') {
         const session = plannedRes.body;
-        console.log('Planned session loaded:', session);
         setPlannedSession(session);
       } else {
         setPlannedSession(null);
@@ -157,16 +156,18 @@ export default function HomeTab() {
     try {
       const res = await generatePlan();
       if (res.ok) {
-        console.log('Generated plan:', res.body);
+        showSuccess('Session Generated', 'Your personalized session has been created.');
         // Refresh data to show new plan
         await loadHomeData(false);
       } else if (res?.body?.detail === 'User has no goals') {
         setGoalSheetVisible(true);
       } else {
         console.warn('Generate failed', res);
+        showError('Generation Failed', 'Could not generate a session. Please try again later.');
       }
     } catch (err) {
       console.error('Generate error', err);
+      showError('Generation Error', 'An error occurred while generating the session.');
     } finally {
       setGenerating(false);
     }
@@ -250,7 +251,8 @@ export default function HomeTab() {
           const summary = item.plan_payload?.summary || item.summary || '';
           const date = item.updated || item.created || item.actual_date;
           const status = item.status;
-          const dateLabel = date ? new Date(date).toLocaleDateString() : '';
+          const feedback = item.feedback;
+          const dateLabel = item.completed_date ? new Date(date).toLocaleDateString() : '';
           const duration = item.plan_payload?.estimated_duration_minutes ?? item.estimated_duration_minutes;
           const exercisesCount = item.plan_payload?.exercises?.length ?? item.exercises?.length ?? 0;
 

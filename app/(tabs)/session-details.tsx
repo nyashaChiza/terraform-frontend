@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { startSession, completeSession } from '../../services/sessions';
-import { showSuccess, showError } from '../../services/toast';
+import { startSession, completeSession, addFeedback } from '../../services/sessions';
+import { showError, showSuccess } from '../../services/toast';
+import FeedbackSheet from '../../components/FeedbackSheet';
 
 type Exercise = {
   exercise_id: number;
@@ -16,9 +17,9 @@ type Exercise = {
 
 type Session = {
   id: number;
-  session_id: number;
-  actual_date: string;
-  completed: boolean;
+  planned_session_id: number;
+  started_date: string;
+  completed_date: boolean;
   status: string; // PLANNED, STARTED, COMPLETED
   created: string;
   updated: string;
@@ -67,6 +68,7 @@ export default function SessionDetailsScreen() {
 
   const [startingSession, setStartingSession] = useState(false);
   const [completingSession, setCompletingSession] = useState(false);
+  const [feedbackSheetVisible, setFeedbackSheetVisible] = useState(false);
 
   const handleBack = () => {
     router.back();
@@ -80,15 +82,14 @@ export default function SessionDetailsScreen() {
       if (result.ok) {
         // Update the session with the response
         setSession({ ...session, ...result.body, status: 'STARTED' });
-        showSuccess('Session started', 'Your session has been started.');
+        showSuccess('Session Started', 'Your workout session has begun. Good luck! 💪');
       } else {
         console.error('Failed to start session:', result.body);
-        const msg = result?.body?.detail || JSON.stringify(result.body || result);
-        showError('Failed to start session', msg);
+        showError('Failed to Start', 'Could not start the session. Please try again.');
       }
     } catch (error) {
       console.error('Error starting session:', error);
-      showError('Error starting session', String(error));
+      showError('Error', 'An unexpected error occurred while starting the session.');
     } finally {
       setStartingSession(false);
     }
@@ -102,24 +103,40 @@ export default function SessionDetailsScreen() {
       if (result.ok) {
         // Update the session with the response
         setSession({ ...session, ...result.body, status: 'COMPLETED', completed: true });
-        showSuccess('Session completed', 'Great job — session marked complete.');
+        showSuccess('Session Completed', 'Great work! Your session has been completed. 🎉');
       } else {
         console.error('Failed to complete session:', result.body);
-        const msg = result?.body?.detail || JSON.stringify(result.body || result);
-        showError('Failed to complete session', msg);
+        showError('Failed to Complete', 'Could not complete the session. Please try again.');
       }
     } catch (error) {
       console.error('Error completing session:', error);
-      showError('Error completing session', String(error));
+      showError('Error', 'An unexpected error occurred while completing the session.');
     } finally {
       setCompletingSession(false);
     }
   };
 
   const handleAddFeedback = () => {
-    // Navigate to feedback screen or show feedback modal
-    console.log('Add feedback for session:', session.id);
-    // router.push({ pathname: '/feedback', params: { sessionId: session.id } });
+    // Only show feedback sheet if session is completed and doesn't already have feedback
+    if (isCompleted) {
+      setFeedbackSheetVisible(true);
+    }
+  };
+
+  const handleSubmitFeedback = async (feedback: any) => {
+    try {
+      const result = await addFeedback(session.id, feedback);
+      
+      if (result.ok) {
+        // Update session with new feedback
+        setSession({ ...session, feedback: result.body });
+        return result;
+      } else {
+        throw new Error('Failed to submit feedback');
+      }
+    } catch (error) {
+      throw error;
+    }
   };
 
   if (!session) {
@@ -129,11 +146,12 @@ export default function SessionDetailsScreen() {
       </View>
     );
   }
-  console.log('Rendering session:', session.status);
-  const isCompleted = session.status === 'COMPLETED';
+
+  const isCompleted = session.completed_at || session.status === 'COMPLETED';
   const isStarted = session.status === 'STARTED';
-  const isPlanned = session.status === 'PLANNED';
-  const sessionDate = new Date(session.actual_date || session.created);
+  const isPlanned = session.status === 'PLANNED' || (!session.status && !session.completed_at);
+  const sessionDate = new Date(session.started_date || session.created);
+  const hasFeedback = session.feedback != null;
   const formattedDate = sessionDate.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -150,6 +168,15 @@ export default function SessionDetailsScreen() {
   const goalFeedback = session.plan_payload?.goal_progress_feedback || session.goal_progress_feedback;
   const exercises = session.plan_payload?.exercises || session.exercises || [];
   const estimatedDuration = session.plan_payload?.estimated_duration_minutes;
+
+  // Extract unique muscle groups from exercises for feedback
+  const muscleGroups = Array.from(
+    new Set(
+      exercises
+        .map((ex: any) => ex.muscle_group)
+        .filter((mg: string) => mg)
+    )
+  ) as string[];
 
   return (
     <View className="flex-1 bg-violet-700">
@@ -316,7 +343,7 @@ export default function SessionDetailsScreen() {
         )}
 
         {/* Feedback Section */}
-        {isCompleted && session.feedback && (
+        {isCompleted && hasFeedback && (
           <View className="mb-6">
             <Text className="text-white text-lg font-bold mb-4">Session Feedback</Text>
 
@@ -328,14 +355,14 @@ export default function SessionDetailsScreen() {
                   <Text className="text-gray-700 font-semibold">Effort Rating</Text>
                   <View className="flex-row items-center">
                     <Text className="text-2xl font-bold text-violet-800">{session.feedback.effort_rating}</Text>
-                    <Text className="text-gray-400 ml-1">/10</Text>
+                    <Text className="text-gray-400 ml-1">/5</Text>
                   </View>
                 </View>
                 <View className="flex-row justify-between items-center">
                   <Text className="text-gray-700 font-semibold">Energy Level</Text>
                   <View className="flex-row items-center">
                     <Text className="text-2xl font-bold text-violet-800">{session.feedback.energy_level}</Text>
-                    <Text className="text-gray-400 ml-1">/10</Text>
+                    <Text className="text-gray-400 ml-1">/5</Text>
                   </View>
                 </View>
               </View>
@@ -348,7 +375,7 @@ export default function SessionDetailsScreen() {
                 {Object.entries(session.feedback.soreness_per_muscle).map(([muscle, soreness]) => (
                   <View key={muscle} className="flex-row justify-between mb-2">
                     <Text className="text-gray-700 capitalize">{muscle}</Text>
-                    <Text className="font-semibold text-gray-800">{soreness}/10</Text>
+                    <Text className="font-semibold text-gray-800">{soreness}/5</Text>
                   </View>
                 ))}
               </View>
@@ -398,7 +425,7 @@ export default function SessionDetailsScreen() {
           </Pressable>
         )}
 
-        {isCompleted && (
+        {isCompleted && session.feedback == null && (
           <Pressable 
             className="bg-white py-4 rounded-2xl items-center mb-3"
             onPress={handleAddFeedback}
@@ -414,6 +441,14 @@ export default function SessionDetailsScreen() {
           <Text className="text-white font-semibold text-base">Go Back</Text>
         </Pressable>
       </ScrollView>
+
+      {/* Feedback Sheet */}
+      <FeedbackSheet
+        visible={feedbackSheetVisible}
+        muscleGroups={muscleGroups}
+        onClose={() => setFeedbackSheetVisible(false)}
+        onSubmitFeedback={handleSubmitFeedback}
+      />
     </View>
   );
 }

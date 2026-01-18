@@ -1,5 +1,15 @@
 import React, { useState } from 'react';
-import { Modal, View, Text, TextInput, Pressable, ActivityIndicator, ScrollView, Platform } from 'react-native';
+import {
+  Modal,
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  ActivityIndicator,
+  ScrollView,
+  Platform,
+  KeyboardAvoidingView,
+} from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { createGoal } from '../services/goals';
 import { showError, showSuccess } from '../services/toast';
@@ -10,15 +20,23 @@ type Props = {
   onCreated?: (goal: any) => void;
 };
 
+const GOAL_TYPES = [
+  'WeightLoss',
+  'MuscleGain',
+  'Strength',
+  'Endurance',
+  'Custom',
+] as const;
+
 export default function GoalSheet({ visible, onClose, onCreated }: Props) {
-  const [type, setType] = useState('WeightLoss');
-  const [showTypeOptions, setShowTypeOptions] = useState(false);
+  const [type, setType] = useState<typeof GOAL_TYPES[number]>('WeightLoss');
   const [description, setDescription] = useState('');
-  const [target_value, setTargetValue] = useState('1');
-  const [starting_value, setStartingValue] = useState('1');
+  const [targetValue, setTargetValue] = useState('');
+  const [startingValue, setStartingValue] = useState('');
   const [startDate, setStartDate] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [loading, setLoading] = useState(false);
+
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showDuePicker, setShowDuePicker] = useState(false);
 
@@ -29,20 +47,39 @@ export default function GoalSheet({ visible, onClose, onCreated }: Props) {
     return `${yyyy}-${mm}-${dd}`;
   };
 
+  const parseDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? new Date() : d;
+  };
+
+  const validate = () => {
+    if (!startDate) return 'Start date is required';
+    if (!dueDate) return 'Due date is required';
+    if (!targetValue) return 'Target value is required';
+    if (Number(targetValue) <= 0) return 'Target value must be greater than 0';
+    return null;
+  };
+
   const onSubmit = async () => {
-    if (!startDate || !dueDate) return showError('Validation', 'Please pick start and due dates');
+    const error = validate();
+    if (error) {
+      showError('Validation', error);
+      return;
+    }
+
     setLoading(true);
     try {
       const payload = {
         type,
         description,
-        target_value: Number(target_value) || 0,
+        target_value: Number(targetValue),
+        starting_value: Number(startingValue) || 0,
         start_date: startDate,
         due_date: dueDate,
-        starting_value: Number(starting_value) || 0,
       };
 
       const res = await createGoal(payload as any);
+
       if (res.ok) {
         showSuccess('Goal created');
         onCreated?.(res.body);
@@ -51,79 +88,230 @@ export default function GoalSheet({ visible, onClose, onCreated }: Props) {
         showError('Create failed', JSON.stringify(res.body));
       }
     } catch (err: any) {
-      showError('Network error', err?.message ?? String(err));
+      showError('Error', err?.message ?? 'Failed to create goal');
     } finally {
       setLoading(false);
     }
   };
 
+  const DateField = ({
+    label,
+    value,
+    onPress,
+  }: {
+    label: string;
+    value: string;
+    onPress: () => void;
+  }) => (
+    <View className="mt-5">
+      <Text className="text-gray-700 font-semibold mb-2 text-sm">
+        {label}
+      </Text>
+      <Pressable
+        onPress={onPress}
+        className="border border-gray-300 rounded-xl px-4 py-3 bg-white"
+      >
+        <Text
+          className={`text-base ${
+            value ? 'text-gray-900' : 'text-gray-400'
+          }`}
+        >
+          {value
+            ? new Date(value).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+              })
+            : 'Select date'}
+        </Text>
+      </Pressable>
+    </View>
+  );
+
   return (
     <Modal visible={visible} transparent animationType="slide">
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
-        <View style={{ backgroundColor: '#fff', padding: 16, borderTopLeftRadius: 12, borderTopRightRadius: 12, maxHeight: '85%' }}>
-          <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8 }}>Create Goal</Text>
-          <ScrollView>
-            <View style={{ marginBottom: 10 }}>
-              <Pressable onPress={() => setShowTypeOptions(v => !v)} style={{ borderWidth: 1, borderColor: '#eee', padding: 10, borderRadius: 8 }}>
-                <Text style={{ color: '#111827' }}>{type}</Text>
-              </Pressable>
-              {showTypeOptions && (
-                <View style={{ borderWidth: 1, borderColor: '#eee', borderRadius: 8, marginTop: 6, backgroundColor: '#fff' }}>
-                  {['WeightLoss','MuscleGain','Endurance','Strength','Custom'].map(opt => (
-                    <Pressable key={opt} onPress={() => { setType(opt); setShowTypeOptions(false); }} style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#f1f1f1' }}>
-                      <Text style={{ color: '#111827' }}>{opt}</Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        className="flex-1"
+      >
+        <Pressable className="flex-1 bg-black/40" onPress={onClose}>
+          <View className="flex-1" />
+          <View className="bg-white rounded-t-3xl">
+            {/* Header */}
+            <View className="px-6 pt-6 pb-4 border-b border-gray-100">
+              <Text className="text-2xl font-extrabold text-violet-800">
+                Create Goal
+              </Text>
+              <Text className="text-gray-500 mt-1">
+                Set a clear target to guide your training
+              </Text>
+            </View>
+
+            <ScrollView
+              className="px-6"
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 40 }}
+            >
+              {/* Goal Type */}
+              <View className="mt-5">
+                <Text className="text-gray-700 font-semibold mb-2 text-sm">
+                  Goal Type
+                </Text>
+                <View className="flex-row flex-wrap gap-2">
+                  {GOAL_TYPES.map(opt => (
+                    <Pressable
+                      key={opt}
+                      onPress={() => setType(opt)}
+                      className={`px-4 py-2 rounded-xl border-2 ${
+                        type === opt
+                          ? 'bg-violet-700 border-violet-700'
+                          : 'bg-white border-gray-300'
+                      }`}
+                    >
+                      <Text
+                        className={`font-semibold text-sm ${
+                          type === opt ? 'text-white' : 'text-gray-700'
+                        }`}
+                      >
+                        {opt}
+                      </Text>
                     </Pressable>
                   ))}
                 </View>
+              </View>
+
+              {/* Description */}
+              <View className="mt-5">
+                <Text className="text-gray-700 font-semibold mb-2 text-sm">
+                  Description (optional)
+                </Text>
+                <TextInput
+                  placeholder="e.g. Lose 5kg in 8 weeks"
+                  placeholderTextColor="#9ca3af"
+                  value={description}
+                  onChangeText={setDescription}
+                  className="border border-gray-300 rounded-xl px-4 py-3 text-base"
+                />
+              </View>
+
+              {/* Values */}
+              <View className="mt-5 flex-row gap-3">
+                <View className="flex-1">
+                  <Text className="text-gray-700 font-semibold mb-2 text-sm">
+                    Starting Value
+                  </Text>
+                  <TextInput
+                    keyboardType="numeric"
+                    placeholder="0"
+                    placeholderTextColor="#9ca3af"
+                    value={startingValue}
+                    onChangeText={setStartingValue}
+                    className="border border-gray-300 rounded-xl px-4 py-3 text-base"
+                  />
+                </View>
+
+                <View className="flex-1">
+                  <Text className="text-gray-700 font-semibold mb-2 text-sm">
+                    Target Value
+                  </Text>
+                  <TextInput
+                    keyboardType="numeric"
+                    placeholder="10"
+                    placeholderTextColor="#9ca3af"
+                    value={targetValue}
+                    onChangeText={setTargetValue}
+                    className="border border-gray-300 rounded-xl px-4 py-3 text-base"
+                  />
+                </View>
+              </View>
+
+              {/* Dates */}
+              <DateField
+                label="Start Date"
+                value={startDate}
+                onPress={() => setShowStartPicker(true)}
+              />
+              <DateField
+                label="Due Date"
+                value={dueDate}
+                onPress={() => setShowDuePicker(true)}
+              />
+
+              {showStartPicker && (
+                <View>
+                  <DateTimePicker
+                    value={parseDate(startDate)}
+                    mode="date"
+                    textColor='#374151'
+                    minimumDate={new Date()}
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(_, d) => {
+                      if (Platform.OS === 'android') setShowStartPicker(false);
+                      if (d) setStartDate(formatDate(d));
+                    }}
+                  />
+                  {Platform.OS === 'ios' && (
+                    <Pressable
+                      onPress={() => setShowStartPicker(false)}
+                      className="bg-violet-700 py-3 rounded-xl items-center mt-2"
+                    >
+                      <Text className="text-white font-semibold">Done</Text>
+                    </Pressable>
+                  )}
+                </View>
               )}
-            </View>
-            <TextInput placeholder="Description" value={description} placeholderTextColor="#374151" onChangeText={setDescription} style={{ borderWidth: 1, borderColor: '#eee', padding: 10, borderRadius: 8, marginBottom: 10 }} />
-            <TextInput placeholder="Target value" keyboardType="numeric" placeholderTextColor="#374151" value={target_value} onChangeText={setTargetValue} style={{ borderWidth: 1, borderColor: '#eee', padding: 10, borderRadius: 8, marginBottom: 10 }} />
-            <TextInput placeholder="Starting value" keyboardType="numeric" placeholderTextColor="#374151" value={starting_value} onChangeText={setStartingValue} style={{ borderWidth: 1, borderColor: '#eee', padding: 10, borderRadius: 8, marginBottom: 10 }} />
 
-            <Pressable onPress={() => setShowStartPicker(true)} style={{ borderWidth: 1, borderColor: '#eee', padding: 12, borderRadius: 8, marginBottom: 10 }}>
-              <Text style={{ color: startDate ? '#111827' : '#9ca3af' }}>{startDate || 'Start date'}</Text>
-            </Pressable>
-            {showStartPicker && (
-              <DateTimePicker
-                value={startDate ? new Date(startDate) : new Date()}
-                mode="date"
-                textColor='#374151'
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={(_, d) => {
-                  setShowStartPicker(Platform.OS === 'ios');
-                  if (d) setStartDate(formatDate(d));
-                }}
-              />
-            )}
+              {showDuePicker && (
+                <View>
+                  <DateTimePicker
+                    value={parseDate(dueDate)}
+                    mode="date"
+                    textColor='#374151'
+                    minimumDate={new Date()}
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(_, d) => {
+                      if (Platform.OS === 'android') setShowDuePicker(false);
+                      if (d) setDueDate(formatDate(d));
+                    }}
+                  />
+                  {Platform.OS === 'ios' && (
+                    <Pressable
+                      onPress={() => setShowDuePicker(false)}
+                      className="bg-violet-700 py-3 rounded-xl items-center mt-2"
+                    >
+                      <Text className="text-white font-semibold">Done</Text>
+                    </Pressable>
+                  )}
+                </View>
+              )}
 
-            <Pressable onPress={() => setShowDuePicker(true)} style={{ borderWidth: 1, borderColor: '#eee', padding: 12, borderRadius: 8, marginBottom: 10 }}>
-              <Text style={{ color: dueDate ? '#111827' : '#9ca3af' }}>{dueDate || 'Due date'}</Text>
-            </Pressable>
-            {showDuePicker && (
-              <DateTimePicker
-                value={dueDate ? new Date(dueDate) : new Date()}
-                mode="date"
-                textColor='#374151'
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={(_, d) => {
-                  setShowDuePicker(Platform.OS === 'ios');
-                  if (d) setDueDate(formatDate(d));
-                }}
-              />
-            )}
+              {/* Actions */}
+              <View className="flex-row gap-3 mt-8">
+                <Pressable
+                  onPress={onClose}
+                  disabled={loading}
+                  className="flex-1 py-4 rounded-2xl bg-gray-100 items-center"
+                >
+                  <Text className="font-semibold text-gray-700">Cancel</Text>
+                </Pressable>
 
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
-              <Pressable onPress={onClose} disabled={loading} style={{ padding: 12, borderRadius: 8, backgroundColor: '#eee', flex: 1, marginRight: 8, alignItems: 'center' }}>
-                <Text style={{ color: '#333' }}>Cancel</Text>
-              </Pressable>
-              <Pressable onPress={onSubmit} disabled={loading} style={{ padding: 12, borderRadius: 8, backgroundColor: '#6D28D9', flex: 1, marginLeft: 8, alignItems: 'center' }}>
-                {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>Create</Text>}
-              </Pressable>
-            </View>
-          </ScrollView>
-        </View>
-      </View>
+                <Pressable
+                  onPress={onSubmit}
+                  disabled={loading}
+                  className="flex-1 py-4 rounded-2xl bg-violet-700 items-center shadow-lg"
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text className="font-bold text-white">Create Goal</Text>
+                  )}
+                </Pressable>
+              </View>
+            </ScrollView>
+          </View>
+        </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

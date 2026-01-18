@@ -24,7 +24,6 @@ export async function getPlannedSessions() {
     method: 'GET',
     headers: { 'Accept': 'application/json', ...auth } as HeadersInit,
   });
-
   const body = await parseResponse(res);
   if (!res.ok) return { ok: false, status: res.status, body };
   if (!body || body.detail) return { ok: false, status: res.status, body: null };
@@ -37,7 +36,17 @@ export async function getCompletedSessions() {
     method: 'GET',
     headers: { 'Accept': 'application/json', ...auth },
   });
+  const body = await parseResponse(res);
+  if (!res.ok) return { ok: false, status: res.status, body };
+  return { ok: true, status: res.status, body };
+}
 
+export async function getSessionDetails(sessionId: number) {
+  const auth = await buildAuthHeader();
+  const res = await fetch(`${BASE_URL}/api/sessions/${sessionId}`, {
+    method: 'GET',
+    headers: { 'Accept': 'application/json', ...auth },
+  });
   const body = await parseResponse(res);
   if (!res.ok) return { ok: false, status: res.status, body };
   return { ok: true, status: res.status, body };
@@ -48,7 +57,6 @@ export async function startSession(sessionId: number) {
   const res = await fetch(`${BASE_URL}/api/sessions/${sessionId}/start`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', ...auth },
-    // Remove body - session_id is in the URL path
   });
   const body = await parseResponse(res);
   if (!res.ok) return { ok: false, status: res.status, body };
@@ -60,11 +68,36 @@ export async function completeSession(sessionId: number, feedback?: any) {
   const res = await fetch(`${BASE_URL}/api/sessions/${sessionId}/complete`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', ...auth },
-    // Only include body if there's feedback
     ...(feedback && { body: JSON.stringify({ feedback }) }),
   });
   const body = await parseResponse(res);
   if (!res.ok) return { ok: false, status: res.status, body };
   return { ok: true, status: res.status, body };
 }
-export default { getPlannedSessions, getCompletedSessions, startSession, completeSession };
+
+export async function addFeedback(sessionId: number, feedback: {
+  soreness_per_muscle: Record<string, number>;
+  joint_pain: boolean;
+  effort_rating: number;
+  energy_level: number;
+  summary: string;
+}) {
+  const auth = await buildAuthHeader();
+  const res = await fetch(`${BASE_URL}/api/sessions/${sessionId}/feedback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', ...auth },
+    body: JSON.stringify(feedback),
+  });
+  const body = await parseResponse(res);
+  if (!res.ok) return { ok: false, status: res.status, body };
+  return { ok: true, status: res.status, body };
+}
+
+export default { 
+  getPlannedSessions, 
+  getCompletedSessions, 
+  getSessionDetails,
+  startSession, 
+  completeSession, 
+  addFeedback 
+};
