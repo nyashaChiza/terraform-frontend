@@ -21,7 +21,7 @@ type ProfilePayload = {
   height: number;
   weight: number;
   date_of_birth: string;
-  experience_level: 'Beginner' | 'Intermediate' | 'Advanced';
+  experience_level: 'Beginner' | 'Intermediate' | 'Expert';
   preferred_sessions_per_week: number;
   phone_number: string;
 };
@@ -338,7 +338,7 @@ export default function ProfileSheet({
                 <View className="flex-row gap-2">
                   <ExperienceButton value="Beginner" label="Beginner" />
                   <ExperienceButton value="Intermediate" label="Intermediate" />
-                  <ExperienceButton value="Advanced" label="Advanced" />
+                  <ExperienceButton value="Expert" label="Advanced" />
                 </View>
               </View>
 
