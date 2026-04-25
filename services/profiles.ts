@@ -50,4 +50,29 @@ export async function createProfile(payload: any) {
   }
 }
 
-export default { getProfile, createProfile };
+export async function updateProfile(payload: any) {
+  const token = authStore.get().token;
+  const authHeader = token
+    ? token.toLowerCase().startsWith('bearer ') ? token : `Bearer ${token}`
+    : undefined;
+
+  const res = await fetch(`${BASE_URL}/api/profiles/`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(authHeader ? { Authorization: authHeader } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const text = await res.text();
+  try {
+    const json = JSON.parse(text);
+    if (!res.ok) return { ok: false, status: res.status, body: json };
+    return { ok: true, status: res.status, body: json };
+  } catch {
+    return { ok: res.ok, status: res.status, body: text };
+  }
+}
+
+export default { getProfile, createProfile, updateProfile };

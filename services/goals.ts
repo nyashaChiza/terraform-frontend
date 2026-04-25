@@ -40,7 +40,7 @@ export async function createGoal(payload: GoalPayload) {
   return { ok: true, status: res.status, body };
 }
 
-export async function updateGoal(id: string, payload: GoalPayload) {
+export async function updateGoal(id: string | number, payload: GoalPayload) {
   const auth = await buildAuthHeader();
   const res = await fetch(`${BASE_URL}/api/goals/${id}/`, {
     method: 'PUT',
@@ -53,4 +53,28 @@ export async function updateGoal(id: string, payload: GoalPayload) {
   return { ok: true, status: res.status, body };
 }
 
-export default { createGoal, updateGoal };
+export async function getGoals() {
+  const auth = await buildAuthHeader();
+  const res = await fetch(`${BASE_URL}/api/goals/current`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json', ...auth },
+  });
+
+  const body = await parseResponse(res);
+  if (!res.ok) return { ok: false, status: res.status, body };
+  return { ok: true, status: res.status, body };
+}
+
+export async function closeGoal(id: string | number) {
+  const auth = await buildAuthHeader();
+  const res = await fetch(`${BASE_URL}/api/goals/${id}/close`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...auth },
+  });
+
+  const body = await parseResponse(res);
+  if (!res.ok) return { ok: false, status: res.status, body };
+  return { ok: true, status: res.status, body };
+}
+
+export default { createGoal, updateGoal, getGoals, closeGoal };

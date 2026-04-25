@@ -3,6 +3,7 @@ import '../global.css';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { AlertNotificationRoot } from 'react-native-alert-notification';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // KEEP splash visible
 SplashScreen.preventAutoHideAsync();
@@ -19,8 +20,10 @@ export default function Layout() {
   }, []);
 
   return (
-    <AlertNotificationRoot>
-      <Stack screenOptions={{ headerShown: false }} />
-    </AlertNotificationRoot>
+    <SafeAreaProvider>
+      <AlertNotificationRoot>
+        <Stack screenOptions={{ headerShown: false }} />
+      </AlertNotificationRoot>
+    </SafeAreaProvider>
   );
 }

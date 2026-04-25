@@ -1,0 +1,134 @@
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  ActivityIndicator,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { getProfile, updateProfile } from '../../services/profiles';
+import { authStore } from '../../store/auth';
+import ProfileSheet from '../../components/ProfileSheet';
+import { showError } from '../../services/toast';
+
+export default function ProfileTab() {
+  const insets = useSafeAreaInsets();
+  const [profile, setProfile] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [editVisible, setEditVisible] = useState(false);
+
+  const loadProfile = async () => {
+    try {
+      const res = await getProfile();
+      if (res.ok) {
+        setProfile(res.body);
+        authStore.set({ user: res.body });
+      }
+    } catch {
+      showError('Error', 'Could not load profile');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadProfile(); }, []);
+
+  const handleUpdate = async (payload: any) => {
+    const res = await updateProfile(payload);
+    if (res.ok) {
+      setProfile(res.body);
+      authStore.set({ user: res.body });
+    }
+    return res;
+  };
+
+  if (loading) {
+    return (
+      <View className="flex-1 bg-violet-700 items-center justify-center">
+        <ActivityIndicator color="#fff" size="large" />
+      </View>
+    );
+  }
+
+  const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || 'Your Profile';
+  const initials = [profile?.first_name?.[0], profile?.last_name?.[0]].filter(Boolean).join('').toUpperCase() || '?';
+
+  return (
+    <View className="flex-1 bg-violet-700">
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 140 }}
+      >
+        {/* Header */}
+        <View className="px-5 pb-6 items-center" style={{ paddingTop: insets.top + 16 }}>
+          {/* Avatar */}
+          <View className="w-24 h-24 rounded-full bg-white/25 items-center justify-center mb-4 border-2 border-white/40">
+            <Text className="text-white text-3xl font-extrabold">{initials}</Text>
+          </View>
+          <Text className="text-white text-2xl font-extrabold">{fullName}</Text>
+          {profile?.phone_number ? (
+            <Text className="text-violet-200 mt-1">{profile.phone_number}</Text>
+          ) : null}
+
+          <Pressable
+            onPress={() => setEditVisible(true)}
+            className="mt-4 flex-row items-center gap-2 bg-white/20 border border-white/30 px-5 py-2.5 rounded-full"
+          >
+            <Ionicons name="pencil" size={14} color="#fff" />
+            <Text className="text-white font-semibold text-sm">Edit Profile</Text>
+          </Pressable>
+        </View>
+
+        {/* Stats grid */}
+        {profile && (
+          <View className="mx-5 mb-4">
+            <View className="flex-row gap-3 mb-3">
+              <StatCard label="Height" value={profile.height ? `${profile.height} cm` : '—'} icon="resize-outline" />
+              <StatCard label="Weight" value={profile.weight ? `${profile.weight} kg` : '—'} icon="barbell-outline" />
+            </View>
+            <View className="flex-row gap-3 mb-3">
+              <StatCard label="Experience" value={profile.experience_level ?? '—'} icon="trophy-outline" />
+              <StatCard label="Sessions / week" value={profile.preferred_sessions_per_week ? `${profile.preferred_sessions_per_week}` : '—'} icon="calendar-outline" />
+            </View>
+            <View className="flex-row gap-3">
+              <StatCard label="Gender" value={profile.gender ?? '—'} icon="person-outline" />
+              <StatCard
+                label="Date of Birth"
+                value={profile.date_of_birth
+                  ? new Date(profile.date_of_birth).toLocaleDateString('en-GB', {
+                      day: 'numeric', month: 'short', year: 'numeric',
+                    })
+                  : '—'}
+                icon="calendar-number-outline"
+              />
+            </View>
+          </View>
+        )}
+      </ScrollView>
+
+      <ProfileSheet
+        visible={editVisible}
+        mode="update"
+        initialValues={profile}
+        onSubmitProfile={handleUpdate}
+        onClose={() => setEditVisible(false)}
+        onSuccess={(updated) => {
+          setProfile(updated);
+          setEditVisible(false);
+        }}
+      />
+    </View>
+  );
+}
+
+function StatCard({ label, value, icon }: { label: string; value: string; icon: string }) {
+  return (
+    <View className="flex-1 bg-white/95 rounded-2xl p-4">
+      <Ionicons name={icon as any} size={18} color="#6d28d9" style={{ marginBottom: 6 }} />
+      <Text className="text-xs text-gray-400 mb-1">{label}</Text>
+      <Text className="text-sm font-bold text-violet-800">{value}</Text>
+    </View>
+  );
+}

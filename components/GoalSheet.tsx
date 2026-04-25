@@ -9,15 +9,20 @@ import {
   ScrollView,
   Platform,
   KeyboardAvoidingView,
+  StyleSheet,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { createGoal } from '../services/goals';
+import { createGoal, updateGoal } from '../services/goals';
 import { showError, showSuccess } from '../services/toast';
 
 type Props = {
   visible: boolean;
   onClose: () => void;
+  mode?: 'create' | 'update';
+  goalId?: string | number;
+  initialValues?: any;
   onCreated?: (goal: any) => void;
+  onUpdated?: (goal: any) => void;
 };
 
 const GOAL_TYPES = [
@@ -28,7 +33,7 @@ const GOAL_TYPES = [
   'Custom',
 ] as const;
 
-export default function GoalSheet({ visible, onClose, onCreated }: Props) {
+export default function GoalSheet({ visible, onClose, mode = 'create', goalId, initialValues, onCreated, onUpdated }: Props) {
   const [type, setType] = useState<typeof GOAL_TYPES[number]>('WeightLoss');
   const [description, setDescription] = useState('');
   const [targetValue, setTargetValue] = useState('');
@@ -36,6 +41,17 @@ export default function GoalSheet({ visible, onClose, onCreated }: Props) {
   const [startDate, setStartDate] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [loading, setLoading] = useState(false);
+
+  React.useEffect(() => {
+    if (visible && mode === 'update' && initialValues) {
+      if (GOAL_TYPES.includes(initialValues.type)) setType(initialValues.type);
+      setDescription(initialValues.description ?? '');
+      setTargetValue(initialValues.target_value != null ? String(initialValues.target_value) : '');
+      setStartingValue(initialValues.starting_value != null ? String(initialValues.starting_value) : '');
+      setStartDate(initialValues.start_date ?? '');
+      setDueDate(initialValues.due_date ?? '');
+    }
+  }, [visible, mode, initialValues]);
 
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showDuePicker, setShowDuePicker] = useState(false);
@@ -78,14 +94,20 @@ export default function GoalSheet({ visible, onClose, onCreated }: Props) {
         due_date: dueDate,
       };
 
-      const res = await createGoal(payload as any);
+      let res;
+      if (mode === 'update' && goalId != null) {
+        res = await updateGoal(goalId, payload as any);
+      } else {
+        res = await createGoal(payload as any);
+      }
 
       if (res.ok) {
-        showSuccess('Goal created');
-        onCreated?.(res.body);
+        showSuccess(mode === 'update' ? 'Goal updated' : 'Goal created');
+        if (mode === 'update') onUpdated?.(res.body);
+        else onCreated?.(res.body);
         onClose();
       } else {
-        showError('Create failed', JSON.stringify(res.body));
+        showError(mode === 'update' ? 'Update failed' : 'Create failed', JSON.stringify(res.body));
       }
     } catch (err: any) {
       showError('Error', err?.message ?? 'Failed to create goal');
@@ -130,17 +152,16 @@ export default function GoalSheet({ visible, onClose, onCreated }: Props) {
 
   return (
     <Modal visible={visible} transparent animationType="slide">
+      <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)' }]} onPress={onClose} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1"
+        style={{ flex: 1, justifyContent: 'flex-end' }}
       >
-        <Pressable className="flex-1 bg-black/40" onPress={onClose}>
-          <View className="flex-1" />
           <View className="bg-white rounded-t-3xl">
             {/* Header */}
             <View className="px-6 pt-6 pb-4 border-b border-gray-100">
               <Text className="text-2xl font-extrabold text-violet-800">
-                Create Goal
+                {mode === 'update' ? 'Edit Goal' : 'Create Goal'}
               </Text>
               <Text className="text-gray-500 mt-1">
                 Set a clear target to guide your training
@@ -151,6 +172,7 @@ export default function GoalSheet({ visible, onClose, onCreated }: Props) {
               className="px-6"
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
+              automaticallyAdjustKeyboardInsets={true}
               contentContainerStyle={{ paddingBottom: 40 }}
             >
               {/* Goal Type */}
@@ -304,13 +326,12 @@ export default function GoalSheet({ visible, onClose, onCreated }: Props) {
                   {loading ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text className="font-bold text-white">Create Goal</Text>
+                    <Text className="font-bold text-white">{mode === 'update' ? 'Update Goal' : 'Create Goal'}</Text>
                   )}
                 </Pressable>
               </View>
             </ScrollView>
           </View>
-        </Pressable>
       </KeyboardAvoidingView>
     </Modal>
   );

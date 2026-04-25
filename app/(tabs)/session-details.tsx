@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { startSession, completeSession, addFeedback } from '../../services/sessions';
 import { showError, showSuccess } from '../../services/toast';
@@ -52,6 +53,7 @@ type Session = {
 
 export default function SessionDetailsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { session: sessionParam } = useLocalSearchParams<{ session: string }>();
   const [session, setSession] = useState<Session | null>(null);
 
@@ -141,7 +143,7 @@ export default function SessionDetailsScreen() {
 
   if (!session) {
     return (
-      <View className="flex-1 bg-violet-700 px-5 pt-14 justify-center items-center">
+      <View className="flex-1 bg-violet-700 px-5 justify-center items-center">
         <Text className="text-white text-lg">Loading session details...</Text>
       </View>
     );
@@ -180,7 +182,7 @@ export default function SessionDetailsScreen() {
 
   return (
     <View className="flex-1 bg-violet-700">
-      <ScrollView className="flex-1 px-5 pt-14" showsVerticalScrollIndicator={false}>
+      <ScrollView className="flex-1 px-5" style={{ paddingTop: insets.top + 16 }} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View className="flex-row items-center justify-between mb-6">
           <Text className="text-white text-3xl font-extrabold flex-1">
@@ -436,7 +438,7 @@ export default function SessionDetailsScreen() {
 
         <Pressable
           onPress={handleBack}
-          className="bg-white/20 py-4 rounded-2xl items-center mb-20"
+          className="bg-white/20 py-4 rounded-2xl items-center mb-10"
         >
           <Text className="text-white font-semibold text-base">Go Back</Text>
         </Pressable>

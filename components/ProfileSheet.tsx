@@ -9,6 +9,7 @@ import {
   ScrollView,
   Platform,
   KeyboardAvoidingView,
+  StyleSheet,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { showError, showSuccess } from '../services/toast';
@@ -31,6 +32,7 @@ type Props = {
   initialValues?: Partial<ProfilePayload>;
   onSubmitProfile: (payload: ProfilePayload) => Promise<any>;
   onSuccess: (profile: any) => void;
+  onClose?: () => void;
 };
 
 export default function ProfileSheet({
@@ -39,6 +41,7 @@ export default function ProfileSheet({
   initialValues,
   onSubmitProfile,
   onSuccess,
+  onClose,
 }: Props) {
   const [form, setForm] = useState<ProfilePayload>({
     first_name: '',
@@ -173,12 +176,11 @@ export default function ProfileSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide">
+      <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)' }]} onPress={closeDatePicker} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1"
+        style={{ flex: 1, justifyContent: 'flex-end' }}
       >
-        <Pressable className="flex-1 bg-black/40" onPress={closeDatePicker}>
-          <View className="flex-1" />
           <View className="bg-white rounded-t-3xl">
             {/* Header */}
             <View className="px-6 pt-6 pb-4 border-b border-gray-100">
@@ -193,6 +195,7 @@ export default function ProfileSheet({
             <ScrollView
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
+              automaticallyAdjustKeyboardInsets={true}
               contentContainerStyle={{ paddingBottom: 40 }}
               className="px-6"
             >
@@ -351,23 +354,33 @@ export default function ProfileSheet({
                 </View>
               </View>
 
-              {/* Submit button */}
-              <Pressable
-                onPress={onSubmit}
-                disabled={loading}
-                className="bg-violet-700 py-4 rounded-2xl items-center mb-4 shadow-lg"
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text className="text-white font-bold text-base">
-                    {mode === 'create' ? 'Save Profile' : 'Update Profile'}
-                  </Text>
+              {/* Actions */}
+              <View className="flex-row gap-3 mb-4">
+                {onClose && (
+                  <Pressable
+                    onPress={onClose}
+                    disabled={loading}
+                    className="flex-1 py-4 rounded-2xl bg-gray-100 items-center"
+                  >
+                    <Text className="font-semibold text-gray-700">Cancel</Text>
+                  </Pressable>
                 )}
-              </Pressable>
+                <Pressable
+                  onPress={onSubmit}
+                  disabled={loading}
+                  className="flex-1 py-4 rounded-2xl bg-violet-700 items-center shadow-lg"
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text className="text-white font-bold text-base">
+                      {mode === 'create' ? 'Save Profile' : 'Update Profile'}
+                    </Text>
+                  )}
+                </Pressable>
+              </View>
             </ScrollView>
           </View>
-        </Pressable>
       </KeyboardAvoidingView>
     </Modal>
   );

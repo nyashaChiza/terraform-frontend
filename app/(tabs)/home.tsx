@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, FlatList, RefreshControl } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { getProfile, createProfile } from '../../services/profiles';
 import { getPlannedSessions, getCompletedSessions } from '../../services/sessions';
@@ -37,6 +38,7 @@ const completedSessionsPlaceholder: Session[] = [];
 
 export default function HomeTab() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [profileSheetVisible, setProfileSheetVisible] = useState(false);
   const [checkingProfile, setCheckingProfile] = useState(false);
   const [initialProfileValues, setInitialProfileValues] = useState<any>(null);
@@ -192,7 +194,7 @@ export default function HomeTab() {
         data={completedSessions}
         keyExtractor={(item) => item.id.toString()}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{ paddingBottom: 140 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -202,7 +204,7 @@ export default function HomeTab() {
           />
         }
         ListHeaderComponent={
-          <View className="px-5 pt-14">
+          <View className="px-5" style={{ paddingTop: insets.top + 16 }}>
             {/* Greeting */}
             <Text className="text-white text-3xl font-extrabold">
               Hie {displayName ? displayName : '👋'}
