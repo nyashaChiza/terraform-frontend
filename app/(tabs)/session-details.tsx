@@ -328,17 +328,23 @@ export default function SessionDetailsScreen() {
                   </View>
                 )}
 
-                {/* Notes */}
-                {exercise.notes && (
-                  <View className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-                    <Text className="text-amber-900 text-xs font-semibold mb-1">
-                      💡 Form Tip
-                    </Text>
-                    <Text className="text-amber-800 text-sm">
-                      {exercise.notes}
-                    </Text>
-                  </View>
-                )}
+                {/* Suggested weight + form tip */}
+                <View className="flex-row gap-2">
+                  {exercise.suggested_weight_kg != null && (
+                    <View className="bg-violet-50 border border-violet-200 rounded-xl p-3 flex-1">
+                      <Text className="text-violet-700 text-xs font-semibold mb-1">🏋️ Suggested</Text>
+                      <Text className="text-violet-900 text-base font-bold">
+                        {exercise.suggested_weight_kg === 0 ? 'Bodyweight' : `${exercise.suggested_weight_kg} kg`}
+                      </Text>
+                    </View>
+                  )}
+                  {exercise.notes && (
+                    <View className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex-1">
+                      <Text className="text-amber-900 text-xs font-semibold mb-1">💡 Form Tip</Text>
+                      <Text className="text-amber-800 text-sm">{exercise.notes}</Text>
+                    </View>
+                  )}
+                </View>
               </View>
             ))}
           </View>
@@ -448,6 +454,7 @@ export default function SessionDetailsScreen() {
       <FeedbackSheet
         visible={feedbackSheetVisible}
         muscleGroups={muscleGroups}
+        exercises={exercises}
         onClose={() => setFeedbackSheetVisible(false)}
         onSubmitFeedback={handleSubmitFeedback}
       />

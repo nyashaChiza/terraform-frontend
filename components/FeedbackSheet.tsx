@@ -13,28 +13,43 @@ import {
 } from 'react-native';
 import { showError, showSuccess } from '../services/toast';
 
+type ExerciseWeight = {
+  exercise_id: number;
+  name: string;
+  weight_kg: number;
+};
+
 type FeedbackPayload = {
   soreness_per_muscle: Record<string, number>;
   joint_pain: boolean;
   effort_rating: number;
   energy_level: number;
   summary: string;
+  weights_used: ExerciseWeight[];
+};
+
+type Exercise = {
+  exercise_id: number;
+  name: string;
+  suggested_weight_kg?: number;
 };
 
 type Props = {
   visible: boolean;
   muscleGroups: string[];
+  exercises: Exercise[];
   onClose: () => void;
   onSubmitFeedback: (payload: FeedbackPayload) => Promise<any>;
 };
 
-export default function FeedbackSheet({ visible, muscleGroups, onClose, onSubmitFeedback }: Props) {
+export default function FeedbackSheet({ visible, muscleGroups, exercises, onClose, onSubmitFeedback }: Props) {
   const [form, setForm] = useState<FeedbackPayload>({
     soreness_per_muscle: {},
     joint_pain: false,
     effort_rating: 3,
     energy_level: 3,
     summary: '',
+    weights_used: [],
   });
   const [loading, setLoading] = useState(false);
 
@@ -46,10 +61,32 @@ export default function FeedbackSheet({ visible, muscleGroups, onClose, onSubmit
     }
   }, [muscleGroups]);
 
+  // Pre-fill weights from suggested_weight_kg
+  useEffect(() => {
+    if (exercises.length > 0) {
+      const initialWeights: ExerciseWeight[] = exercises.map(ex => ({
+        exercise_id: ex.exercise_id,
+        name: ex.name,
+        weight_kg: ex.suggested_weight_kg ?? 0,
+      }));
+      setForm(prev => ({ ...prev, weights_used: initialWeights }));
+    }
+  }, [exercises]);
+
   const updateSoreness = (muscle: string, rating: number) => {
     setForm(prev => ({
       ...prev,
       soreness_per_muscle: { ...prev.soreness_per_muscle, [muscle]: rating },
+    }));
+  };
+
+  const updateWeight = (exercise_id: number, value: string) => {
+    const kg = parseFloat(value) || 0;
+    setForm(prev => ({
+      ...prev,
+      weights_used: prev.weights_used.map(w =>
+        w.exercise_id === exercise_id ? { ...w, weight_kg: kg } : w
+      ),
     }));
   };
 
@@ -95,7 +132,6 @@ export default function FeedbackSheet({ visible, muscleGroups, onClose, onSubmit
 
   return (
     <Modal visible={visible} transparent animationType="slide">
-      {/* Backdrop — separate from sheet so KAV only wraps the sheet */}
       <Pressable style={[StyleSheet.absoluteFill, styles.backdrop]} onPress={onClose} />
 
       <KeyboardAvoidingView
@@ -118,6 +154,36 @@ export default function FeedbackSheet({ visible, muscleGroups, onClose, onSubmit
             automaticallyAdjustKeyboardInsets={true}
             contentContainerStyle={{ paddingBottom: 32 }}
           >
+            {/* Weights Used */}
+            {form.weights_used.length > 0 && (
+              <View className="mb-6">
+                <Text className="text-gray-700 font-semibold mb-1">Weights Used</Text>
+                <Text className="text-gray-400 text-xs mb-3">
+                  Pre-filled from AI suggestion — update to what you actually lifted (kg)
+                </Text>
+                {form.weights_used.map(w => (
+                  <View key={w.exercise_id} className="flex-row items-center justify-between mb-3">
+                    <Text className="text-gray-700 text-sm flex-1 mr-3" numberOfLines={1}>
+                      {w.name}
+                    </Text>
+                    <View className="flex-row items-center border border-gray-300 rounded-xl overflow-hidden">
+                      <TextInput
+                        keyboardType="decimal-pad"
+                        value={w.weight_kg > 0 ? String(w.weight_kg) : ''}
+                        onChangeText={v => updateWeight(w.exercise_id, v)}
+                        placeholder="0"
+                        placeholderTextColor="#9ca3af"
+                        className="w-16 px-3 py-2 text-center text-base text-gray-900"
+                      />
+                      <View className="bg-gray-100 px-2 py-2">
+                        <Text className="text-gray-500 text-xs">kg</Text>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
             {/* Effort Rating */}
             <View className="mb-5">
               <Text className="text-gray-700 font-semibold mb-2">Effort Rating</Text>
@@ -225,6 +291,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    maxHeight: '88%',
+    maxHeight: '92%',
   },
 });
