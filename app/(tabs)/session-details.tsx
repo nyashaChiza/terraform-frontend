@@ -44,6 +44,7 @@ type Session = {
     effort_rating: number;
     energy_level: number;
     summary: string;
+    weights_used?: { exercise_id: number; name: string; weight_kg: number }[];
     id: number;
     logged_session_id: number;
     created: string;
@@ -384,6 +385,21 @@ export default function SessionDetailsScreen() {
                   <View key={muscle} className="flex-row justify-between mb-2">
                     <Text className="text-gray-700 capitalize">{muscle}</Text>
                     <Text className="font-semibold text-gray-800">{soreness}/5</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Weights Used */}
+            {(session.feedback.weights_used ?? []).length > 0 && (
+              <View className="bg-white rounded-2xl p-4 mb-3">
+                <Text className="text-xs text-gray-400 uppercase mb-3">Weights Lifted</Text>
+                {session.feedback.weights_used!.map(w => (
+                  <View key={w.exercise_id} className="flex-row justify-between items-center mb-2">
+                    <Text className="text-gray-700 flex-1 mr-2" numberOfLines={1}>{w.name}</Text>
+                    <Text className="font-bold text-violet-800">
+                      {w.weight_kg === 0 ? 'Bodyweight' : `${w.weight_kg} kg`}
+                    </Text>
                   </View>
                 ))}
               </View>

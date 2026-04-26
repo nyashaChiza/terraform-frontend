@@ -36,6 +36,8 @@ export default function GoalsTab() {
   const [refreshing, setRefreshing] = useState(false);
   const [sheetVisible, setSheetVisible] = useState(false);
 
+  const hasActiveGoal = goals.some(g => g.status === 'Active');
+
   const loadGoals = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
@@ -74,12 +76,20 @@ export default function GoalsTab() {
           <View className="px-5 pb-4" style={{ paddingTop: insets.top + 16 }}>
             <Text className="text-white text-3xl font-extrabold">Goals</Text>
             <Text className="text-violet-200 mb-6">Track your fitness objectives</Text>
-            <Pressable
-              onPress={() => setSheetVisible(true)}
-              className="bg-white/20 border border-white/30 rounded-2xl py-3.5 items-center"
-            >
-              <Text className="text-white font-semibold text-base">+ New Goal</Text>
-            </Pressable>
+            {hasActiveGoal ? (
+              <View className="bg-white/10 border border-white/20 rounded-2xl py-3.5 px-4 flex-row items-center gap-2">
+                <Text className="text-violet-200 text-sm flex-1">
+                  You have an active goal. Complete or close it before creating a new one.
+                </Text>
+              </View>
+            ) : (
+              <Pressable
+                onPress={() => setSheetVisible(true)}
+                className="bg-white/20 border border-white/30 rounded-2xl py-3.5 items-center"
+              >
+                <Text className="text-white font-semibold text-base">+ New Goal</Text>
+              </Pressable>
+            )}
           </View>
         }
         ListEmptyComponent={
@@ -98,9 +108,11 @@ export default function GoalsTab() {
         renderItem={({ item }) => {
           const icon = GOAL_ICONS[item.type] ?? '🎯';
           const s = STATUS_COLORS[item.status] ?? { bg: '#f3f4f6', text: '#6b7280' };
+          const starting = item.starting_value ?? 0;
+          const denominator = item.target_value - starting;
           const progress =
-            item.target_value && item.current_value != null
-              ? Math.min((item.current_value / item.target_value) * 100, 100)
+            item.target_value != null && item.current_value != null && denominator !== 0
+              ? Math.min(Math.max(Math.round(((item.current_value - starting) / denominator) * 100), 0), 100)
               : null;
 
           return (
@@ -141,6 +153,7 @@ export default function GoalsTab() {
                     <Text className="text-xs text-gray-400">Progress</Text>
                     <Text className="text-xs text-gray-500">
                       {item.current_value} / {item.target_value}
+                      {progress !== null ? ` · ${progress}%` : ''}
                     </Text>
                   </View>
                   <View className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -152,13 +165,18 @@ export default function GoalsTab() {
                 </View>
               )}
 
-              {item.due_date && (
-                <Text className="text-xs text-gray-400 mt-2">
-                  Due {new Date(item.due_date).toLocaleDateString('en-GB', {
-                    day: 'numeric', month: 'short', year: 'numeric',
-                  })}
-                </Text>
-              )}
+              <View className="flex-row items-center justify-between mt-2">
+                {item.due_date ? (
+                  <Text className="text-xs text-gray-400">
+                    Due {new Date(item.due_date).toLocaleDateString('en-GB', {
+                      day: 'numeric', month: 'short', year: 'numeric',
+                    })}
+                  </Text>
+                ) : <View />}
+                {item.type !== 'Custom' && (
+                  <Text className="text-xs text-violet-400">auto-tracked</Text>
+                )}
+              </View>
             </Pressable>
           );
         }}

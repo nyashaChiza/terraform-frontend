@@ -190,11 +190,59 @@ export default function HomeTab() {
 
   return (
     <View className="flex-1 bg-violet-700">
+
+      {/* ── Static top section — never scrolls ── */}
+      <View className="px-5" style={{ paddingTop: insets.top + 16 }}>
+        {/* Greeting */}
+        <Text className="text-white text-3xl font-extrabold">
+          Hie {displayName ? displayName : '👋'}
+        </Text>
+        <Text className="text-violet-200 mb-8">
+          Ready for your next session?
+        </Text>
+
+        {/* Planned Session card */}
+        {plannedSession ? (
+          <Pressable
+            onPress={() => {
+              router.push({
+                pathname: '/(tabs)/session-details',
+                params: { session: JSON.stringify(plannedSession) },
+              });
+            }}
+            className="bg-white rounded-3xl p-6 mb-6"
+          >
+            <Text className="text-xs text-gray-400 uppercase mb-1">Planned Session</Text>
+            <Text className="text-2xl font-extrabold text-violet-800">{plannedSession.title}</Text>
+            <Text className="text-gray-500 mt-3">⏱ {plannedSession.duration ?? '45 min'}</Text>
+          </Pressable>
+        ) : (
+          <View className="bg-white rounded-3xl p-6 mb-6">
+            <Text className="text-xl font-extrabold text-violet-800 mb-2">No planned session</Text>
+            <Text className="text-gray-500 mb-5">
+              Generate a personalized workout plan for today
+            </Text>
+            <Pressable onPress={onGenerateSession} className="bg-violet-700 py-4 rounded-2xl items-center">
+              {generating ? (
+                <Text className="text-white font-bold text-base">Generating...</Text>
+              ) : (
+                <Text className="text-white font-bold text-base">Generate Session</Text>
+              )}
+            </Pressable>
+          </View>
+        )}
+
+        {/* Completed Sessions label */}
+        <Text className="text-white text-lg font-bold mb-3">Completed Sessions</Text>
+      </View>
+
+      {/* ── Independently scrolling sessions list ── */}
       <FlatList
         data={completedSessions}
         keyExtractor={(item) => item.id.toString()}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 140 }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 140 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -203,57 +251,17 @@ export default function HomeTab() {
             colors={['#7c3aed']}
           />
         }
-        ListHeaderComponent={
-          <View className="px-5" style={{ paddingTop: insets.top + 16 }}>
-            {/* Greeting */}
-            <Text className="text-white text-3xl font-extrabold">
-              Hie {displayName ? displayName : '👋'}
-            </Text>
-            <Text className="text-violet-200 mb-8">
-              Ready for your next session?
-            </Text>
-
-            {/* Planned Session */}
-            {plannedSession ? (
-              <Pressable
-                onPress={() => {
-                  router.push({
-                    pathname: '/(tabs)/session-details',
-                    params: { session: JSON.stringify(plannedSession) },
-                  });
-                }}
-                className="bg-white rounded-3xl p-6 mb-6"
-              >
-                <Text className="text-xs text-gray-400 uppercase mb-1">Planned Session</Text>
-                <Text className="text-2xl font-extrabold text-violet-800">{plannedSession.title}</Text>
-                <Text className="text-gray-500 mt-3">⏱ {plannedSession.duration ?? '45 min'}</Text>
-              </Pressable>
-            ) : (
-              <View className="bg-white rounded-3xl p-6 mb-6">
-                <Text className="text-xl font-extrabold text-violet-800 mb-2">No planned session</Text>
-                <Text className="text-gray-500 mb-5">
-                  Generate a personalized workout plan for today
-                </Text>
-                <Pressable onPress={onGenerateSession} className="bg-violet-700 py-4 rounded-2xl items-center">
-                  {generating ? (
-                    <Text className="text-white font-bold text-base">Generating...</Text>
-                  ) : (
-                    <Text className="text-white font-bold text-base">Generate Session</Text>
-                  )}
-                </Pressable>
-              </View>
-            )}
-
-            {/* Completed Sessions Header */}
-            <Text className="text-white text-lg font-bold mb-4">Completed Sessions</Text>
-          </View>
+        ListEmptyComponent={
+          !checkingProfile ? (
+            <View className="items-center mt-10">
+              <Text className="text-violet-200 text-sm">No completed sessions yet</Text>
+            </View>
+          ) : null
         }
         renderItem={({ item }) => {
           const title = item.plan_payload?.title || item.title || `Session #${item.id}`;
           const summary = item.plan_payload?.summary || item.summary || '';
           const date = item.updated || item.created || item.actual_date;
-          const status = item.status;
-          const feedback = item.feedback;
           const dateLabel = item.completed_date ? new Date(date).toLocaleDateString() : '';
           const duration = item.plan_payload?.estimated_duration_minutes ?? item.estimated_duration_minutes;
           const exercisesCount = item.plan_payload?.exercises?.length ?? item.exercises?.length ?? 0;
@@ -266,16 +274,16 @@ export default function HomeTab() {
                   params: { session: JSON.stringify(item) },
                 });
               }}
-              className="bg-white/95 rounded-2xl p-4 mb-3 mx-5"
+              className="bg-white/95 rounded-2xl p-4 mb-3"
             >
               <Text className="font-bold text-violet-800">{title}</Text>
               <Text className="text-gray-500 text-xs mt-1">
                 {dateLabel} {duration ? `• ${duration} min` : ''} {exercisesCount ? `• ${exercisesCount} exercises` : ''}
               </Text>
               {summary ? (
-                <Text className="text-gray-600 text-sm mt-2">{summary}</Text>
+                <Text className="text-gray-600 text-sm mt-2" numberOfLines={2}>{summary}</Text>
               ) : null}
-              <Text className="text-green-600 text-xs mt-2">✓ {status}</Text>
+              <Text className="text-green-600 text-xs mt-2">✓ Completed</Text>
             </Pressable>
           );
         }}

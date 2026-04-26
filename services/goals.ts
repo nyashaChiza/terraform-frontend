@@ -42,7 +42,7 @@ export async function createGoal(payload: GoalPayload) {
 
 export async function updateGoal(id: string | number, payload: GoalPayload) {
   const auth = await buildAuthHeader();
-  const res = await fetch(`${BASE_URL}/api/goals/${id}/`, {
+  const res = await fetch(`${BASE_URL}/api/goals/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...auth },
     body: JSON.stringify(payload),
@@ -65,6 +65,19 @@ export async function getGoals() {
   return { ok: true, status: res.status, body };
 }
 
+export async function updateProgress(id: string | number, currentValue: number) {
+  const auth = await buildAuthHeader();
+  const res = await fetch(`${BASE_URL}/api/goals/${id}/progress`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...auth },
+    body: JSON.stringify({ current_value: currentValue }),
+  });
+
+  const body = await parseResponse(res);
+  if (!res.ok) return { ok: false, status: res.status, body };
+  return { ok: true, status: res.status, body };
+}
+
 export async function closeGoal(id: string | number) {
   const auth = await buildAuthHeader();
   const res = await fetch(`${BASE_URL}/api/goals/${id}/close`, {
@@ -77,4 +90,4 @@ export async function closeGoal(id: string | number) {
   return { ok: true, status: res.status, body };
 }
 
-export default { createGoal, updateGoal, getGoals, closeGoal };
+export default { createGoal, updateGoal, getGoals, updateProgress, closeGoal };

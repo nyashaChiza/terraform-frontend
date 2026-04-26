@@ -59,7 +59,14 @@ export default function ProfileSheet({
 
   useEffect(() => {
     if (initialValues) {
-      setForm(prev => ({ ...prev, ...initialValues }));
+      setForm(prev => ({
+        ...prev,
+        ...initialValues,
+        // Ensure string fields are never null so .trim() is safe
+        phone_number: initialValues.phone_number ?? '',
+        first_name: initialValues.first_name ?? '',
+        last_name: initialValues.last_name ?? '',
+      }));
     }
   }, [initialValues]);
 
@@ -78,7 +85,10 @@ export default function ProfileSheet({
     if (!form.date_of_birth) return 'Date of birth is required';
     if (form.height <= 0) return 'Height must be greater than 0';
     if (form.weight <= 0) return 'Weight must be greater than 0';
-    if (!form.phone_number.trim()) return 'Phone number is required';
+    // phone_number is optional — only validate format if provided
+    if (form.phone_number?.trim() && form.phone_number.trim().length < 7) {
+      return 'Phone number must be at least 7 digits';
+    }
     return null;
   };
 
@@ -91,6 +101,12 @@ export default function ProfileSheet({
     setLoading(true);
     try {
       const res = await onSubmitProfile(form);
+      if (!res?.ok) {
+        const detail = res?.body?.detail;
+        const msg = typeof detail === 'string' ? detail : JSON.stringify(detail ?? res?.body ?? 'Unknown error');
+        showError('Error', msg);
+        return;
+      }
       showSuccess(mode === 'create' ? 'Profile created' : 'Profile updated');
       onSuccess(res.body ?? res);
     } catch (err: any) {
