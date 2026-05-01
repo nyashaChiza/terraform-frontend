@@ -7,9 +7,11 @@ import { useRouter } from 'expo-router';
 import { authStore } from '../store/auth';
 
 const TABS = [
-  { name: 'home',    active: 'home',   inactive: 'home-outline' },
-  { name: 'goals',   active: 'flag',   inactive: 'flag-outline' },
-  { name: 'profile', active: 'person', inactive: 'person-outline' },
+  { name: 'home',     active: 'home',       inactive: 'home-outline' },
+  { name: 'progress', active: 'bar-chart',  inactive: 'bar-chart-outline' },
+  { name: 'goals',    active: 'flag',       inactive: 'flag-outline' },
+  { name: 'workouts', active: 'barbell',    inactive: 'barbell-outline' },
+  { name: 'profile',  active: 'person',     inactive: 'person-outline' },
 ] as const;
 
 type Props = {
@@ -74,7 +76,7 @@ function TabButtons({ currentName, state, navigation }: { currentName: string; s
             <View style={[styles.iconWrap, isFocused && styles.iconWrapActive]}>
               <Ionicons
                 name={isFocused ? tab.active : tab.inactive}
-                size={22}
+                size={21}
                 color={isFocused ? '#6d28d9' : 'rgba(255,255,255,0.55)'}
               />
             </View>
@@ -85,7 +87,7 @@ function TabButtons({ currentName, state, navigation }: { currentName: string; s
       {/* Logout */}
       <Pressable onPress={handleLogout} style={styles.tabBtn}>
         <View style={styles.iconWrap}>
-          <Ionicons name="log-out-outline" size={22} color="rgba(255,255,255,0.55)" />
+          <Ionicons name="log-out-outline" size={21} color="rgba(255,255,255,0.55)" />
         </View>
       </Pressable>
     </View>
@@ -120,18 +122,18 @@ const styles = StyleSheet.create({
   },
   inner: {
     flexDirection: 'row',
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 8,
   },
   tabBtn: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },
   iconWrap: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },

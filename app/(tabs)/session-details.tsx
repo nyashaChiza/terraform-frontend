@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, Pressable, ScrollView, Share, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { startSession, completeSession, addFeedback } from '../../services/sessions';
 import { showError, showSuccess } from '../../services/toast';
 import FeedbackSheet from '../../components/FeedbackSheet';
+import RestTimer from '../../components/RestTimer';
 
 type Exercise = {
   exercise_id: number;
@@ -14,6 +15,7 @@ type Exercise = {
   reps: number;
   rest_seconds: number;
   notes: string;
+  suggested_weight_kg?: number;
 };
 
 type Session = {
@@ -21,7 +23,7 @@ type Session = {
   planned_session_id: number;
   started_date: string;
   completed_date: boolean;
-  status: string; // PLANNED, STARTED, COMPLETED
+  status: string;
   created: string;
   updated: string;
   title: string;
@@ -61,8 +63,7 @@ export default function SessionDetailsScreen() {
   useEffect(() => {
     if (sessionParam) {
       try {
-        const parsedSession = JSON.parse(sessionParam);
-        setSession(parsedSession);
+        setSession(JSON.parse(sessionParam));
       } catch (err) {
         console.error('Failed to parse session:', err);
       }
@@ -72,26 +73,22 @@ export default function SessionDetailsScreen() {
   const [startingSession, setStartingSession] = useState(false);
   const [completingSession, setCompletingSession] = useState(false);
   const [feedbackSheetVisible, setFeedbackSheetVisible] = useState(false);
+  const [restTimerVisible, setRestTimerVisible] = useState(false);
+  const [restTimerSeconds, setRestTimerSeconds] = useState(60);
 
-  const handleBack = () => {
-    router.back();
-  };
+  const handleBack = () => router.back();
 
   const handleStartSession = async () => {
     setStartingSession(true);
     try {
-      const result = await startSession(session.id);
-
+      const result = await startSession(session!.id);
       if (result.ok) {
-        // Update the session with the response
-        setSession({ ...session, ...result.body, status: 'STARTED' });
+        setSession(s => ({ ...s!, ...result.body, status: 'STARTED' }));
         showSuccess('Session Started', 'Your workout session has begun. Good luck! 💪');
       } else {
-        console.error('Failed to start session:', result.body);
         showError('Failed to Start', 'Could not start the session. Please try again.');
       }
-    } catch (error) {
-      console.error('Error starting session:', error);
+    } catch {
       showError('Error', 'An unexpected error occurred while starting the session.');
     } finally {
       setStartingSession(false);
@@ -101,45 +98,58 @@ export default function SessionDetailsScreen() {
   const handleCompleteSession = async () => {
     setCompletingSession(true);
     try {
-      const result = await completeSession(session.id);
-
+      const result = await completeSession(session!.id);
       if (result.ok) {
-        // Update the session with the response
-        setSession({ ...session, ...result.body, status: 'COMPLETED', completed: true });
+        setSession(s => ({ ...s!, ...result.body, status: 'COMPLETED', completed: true }));
         showSuccess('Session Completed', 'Great work! Your session has been completed. 🎉');
       } else {
-        console.error('Failed to complete session:', result.body);
         showError('Failed to Complete', 'Could not complete the session. Please try again.');
       }
-    } catch (error) {
-      console.error('Error completing session:', error);
+    } catch {
       showError('Error', 'An unexpected error occurred while completing the session.');
     } finally {
       setCompletingSession(false);
     }
   };
 
-  const handleAddFeedback = () => {
-    // Only show feedback sheet if session is completed and doesn't already have feedback
-    if (isCompleted) {
-      setFeedbackSheetVisible(true);
+  const handleSubmitFeedback = async (feedback: any) => {
+    const result = await addFeedback(session!.id, feedback);
+    if (result.ok) {
+      setSession(s => ({ ...s!, feedback: result.body }));
+      return result;
+    }
+    throw new Error('Failed to submit feedback');
+  };
+
+  const handleShare = async () => {
+    if (!session) return;
+    const title = session.plan_payload?.title || session.title || 'Workout';
+    const duration = session.plan_payload?.estimated_duration_minutes;
+    const exCount = exercises.length;
+    const intensity = session.plan_payload?.intensity || session.intensity;
+
+    const message = [
+      `💪 Just crushed a ${title} session on Terraform!`,
+      duration ? `⏱ ${duration} minutes` : '',
+      exCount ? `🏋️ ${exCount} exercises` : '',
+      intensity ? `🔥 ${intensity} intensity` : '',
+      '',
+      'AI-powered workouts, personalised to my goals.',
+      '#TerraformFit #AIWorkout',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    try {
+      await Share.share({ message, title: 'My Workout — Terraform' });
+    } catch (e) {
+      // User dismissed share sheet — no-op
     }
   };
 
-  const handleSubmitFeedback = async (feedback: any) => {
-    try {
-      const result = await addFeedback(session.id, feedback);
-      
-      if (result.ok) {
-        // Update session with new feedback
-        setSession({ ...session, feedback: result.body });
-        return result;
-      } else {
-        throw new Error('Failed to submit feedback');
-      }
-    } catch (error) {
-      throw error;
-    }
+  const openRestTimer = (restSecs?: number) => {
+    setRestTimerSeconds(restSecs ?? 60);
+    setRestTimerVisible(true);
   };
 
   if (!session) {
@@ -150,75 +160,88 @@ export default function SessionDetailsScreen() {
     );
   }
 
-  const isCompleted = session.completed_at || session.status === 'COMPLETED';
+  const isCompleted = !!(session as any).completed_at || session.status === 'COMPLETED';
   const isStarted = session.status === 'STARTED';
-  const isPlanned = session.status === 'PLANNED' || (!session.status && !session.completed_at);
-  const sessionDate = new Date(session.started_date || session.created);
+  const isPlanned = session.status === 'PLANNED' || (!session.status && !(session as any).completed_at);
   const hasFeedback = session.feedback != null;
-  const formattedDate = sessionDate.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
+
+  const sessionDate = new Date((session as any).started_date || session.created);
+  const formattedDate = sessionDate.toLocaleDateString('en-GB', {
+    year: 'numeric', month: 'long', day: 'numeric',
   });
   const formattedTime = sessionDate.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
+    hour: '2-digit', minute: '2-digit',
   });
 
-  // Get data from plan_payload or fallback to top-level properties
   const summary = session.plan_payload?.summary || session.summary;
   const intensity = session.plan_payload?.intensity || session.intensity;
   const goalFeedback = session.plan_payload?.goal_progress_feedback || session.goal_progress_feedback;
-  const exercises = session.plan_payload?.exercises || session.exercises || [];
+  const exercises: Exercise[] = session.plan_payload?.exercises || session.exercises || [];
   const estimatedDuration = session.plan_payload?.estimated_duration_minutes;
 
-  // Extract unique muscle groups from exercises for feedback
   const muscleGroups = Array.from(
-    new Set(
-      exercises
-        .map((ex: any) => ex.muscle_group)
-        .filter((mg: string) => mg)
-    )
+    new Set(exercises.map((ex: any) => ex.muscle_group).filter(Boolean))
   ) as string[];
 
   return (
     <View className="flex-1 bg-violet-700">
-      <ScrollView className="flex-1 px-5" style={{ paddingTop: insets.top + 16 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        className="flex-1 px-5"
+        style={{ paddingTop: insets.top + 16 }}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Header */}
-        <View className="flex-row items-center justify-between mb-6">
-          <Text className="text-white text-3xl font-extrabold flex-1">
+        <View className="flex-row items-start justify-between mb-4">
+          <Text className="text-white text-3xl font-extrabold flex-1 mr-3" numberOfLines={2}>
             {session.plan_payload?.title || session.title || `Session #${session.id}`}
           </Text>
-          <Pressable onPress={handleBack} className="p-2">
-            <Text className="text-white text-2xl">✕</Text>
-          </Pressable>
+          <View className="flex-row items-center gap-2">
+            {isCompleted && (
+              <Pressable onPress={handleShare} className="p-2">
+                <Text className="text-white text-xl">⬆️</Text>
+              </Pressable>
+            )}
+            <Pressable onPress={handleBack} className="p-2">
+              <Text className="text-white text-2xl">✕</Text>
+            </Pressable>
+          </View>
         </View>
 
-        {/* Session Meta Info */}
-        <View className="flex-row items-center gap-3 mb-4">
+        {/* Meta badges */}
+        <View className="flex-row items-center gap-3 mb-4 flex-wrap">
           {intensity && (
             <View className="bg-violet-600 px-3 py-1 rounded-full">
-              <Text className="text-violet-100 text-xs font-semibold">
-                {intensity}
-              </Text>
+              <Text className="text-violet-100 text-xs font-semibold">{intensity}</Text>
             </View>
           )}
           {estimatedDuration && (
-            <Text className="text-violet-200 text-sm">
-              ⏱ {estimatedDuration} min
-            </Text>
+            <Text className="text-violet-200 text-sm">⏱ {estimatedDuration} min</Text>
           )}
           {exercises.length > 0 && (
-            <Text className="text-violet-200 text-sm">
-              {exercises.length} exercises
-            </Text>
+            <Text className="text-violet-200 text-sm">{exercises.length} exercises</Text>
           )}
-          <Text className={`text-sm font-semibold ${isCompleted ? 'text-green-300' : isStarted ? 'text-yellow-300' : 'text-blue-300'}`}>
+          <Text
+            className={`text-sm font-semibold ${
+              isCompleted ? 'text-green-300' : isStarted ? 'text-yellow-300' : 'text-blue-300'
+            }`}
+          >
             {isCompleted ? '✓ Completed' : isStarted ? '▶ In Progress' : '○ Planned'}
           </Text>
         </View>
 
-        {/* Summary Section */}
+        {/* Rest Timer button (only while in progress) */}
+        {isStarted && (
+          <Pressable
+            onPress={() => openRestTimer(60)}
+            className="bg-violet-600 rounded-2xl px-4 py-3 mb-4 flex-row items-center gap-2"
+          >
+            <Text className="text-white text-lg">⏱</Text>
+            <Text className="text-white font-bold flex-1">Rest Timer</Text>
+            <Text className="text-violet-300 text-sm">Tap to start</Text>
+          </Pressable>
+        )}
+
+        {/* Summary */}
         {summary && (
           <View className="bg-white rounded-3xl p-5 mb-4">
             <Text className="text-xs text-gray-400 uppercase mb-2">Workout Summary</Text>
@@ -226,22 +249,19 @@ export default function SessionDetailsScreen() {
           </View>
         )}
 
-        {/* Goal Progress Feedback */}
+        {/* Goal Feedback */}
         {goalFeedback && (
           <View className="mb-4 bg-violet-600/50 rounded-2xl p-4 border border-violet-500/30">
             <Text className="text-violet-200 text-xs uppercase font-semibold mb-2">
               💪 Progress Note
             </Text>
-            <Text className="text-white text-sm leading-5">
-              {goalFeedback}
-            </Text>
+            <Text className="text-white text-sm leading-5">{goalFeedback}</Text>
           </View>
         )}
 
-        {/* Session Info Card */}
+        {/* Session Info */}
         <View className="bg-white rounded-3xl p-6 mb-6">
           <Text className="text-xs text-gray-400 uppercase mb-3">Session Details</Text>
-
           <View className="space-y-3">
             <View className="flex-row justify-between">
               <Text className="text-gray-600">Date</Text>
@@ -262,24 +282,18 @@ export default function SessionDetailsScreen() {
           </View>
         </View>
 
-        {/* Exercises Section */}
+        {/* Exercises */}
         {exercises.length > 0 && (
           <View className="mb-6">
             <Text className="text-white text-xl font-bold mb-4">Exercises</Text>
-            
             {exercises.map((exercise, index) => (
-              <View 
-                key={exercise.exercise_id || index} 
-                className="bg-white rounded-2xl p-5 mb-3"
-              >
-                {/* Exercise Header */}
+              <View key={exercise.exercise_id || index} className="bg-white rounded-2xl p-5 mb-3">
+                {/* Header */}
                 <View className="flex-row items-start justify-between mb-3">
                   <View className="flex-1">
                     <View className="flex-row items-center gap-2 mb-1">
                       <View className="bg-violet-100 w-7 h-7 rounded-full items-center justify-center">
-                        <Text className="text-violet-700 font-bold text-sm">
-                          {index + 1}
-                        </Text>
+                        <Text className="text-violet-700 font-bold text-sm">{index + 1}</Text>
                       </View>
                       <Text className="text-violet-900 text-lg font-bold flex-1">
                         {exercise.name || `Exercise ${index + 1}`}
@@ -291,36 +305,37 @@ export default function SessionDetailsScreen() {
                       </Text>
                     )}
                   </View>
+                  {/* Rest timer shortcut per exercise */}
+                  {isStarted && exercise.rest_seconds && (
+                    <Pressable
+                      onPress={() => openRestTimer(exercise.rest_seconds)}
+                      className="bg-violet-100 px-3 py-1.5 rounded-xl ml-2"
+                    >
+                      <Text className="text-violet-700 text-xs font-bold">
+                        ⏱ {exercise.rest_seconds}s
+                      </Text>
+                    </Pressable>
+                  )}
                 </View>
 
-                {/* Sets & Reps */}
+                {/* Sets / Reps / Rest */}
                 {(exercise.sets || exercise.reps || exercise.rest_seconds) && (
                   <View className="flex-row gap-3 mb-3">
                     {exercise.sets && (
                       <View className="flex-1 bg-violet-50 rounded-xl p-3">
-                        <Text className="text-violet-600 text-xs font-semibold mb-1">
-                          Sets
-                        </Text>
-                        <Text className="text-violet-900 text-2xl font-bold">
-                          {exercise.sets}
-                        </Text>
+                        <Text className="text-violet-600 text-xs font-semibold mb-1">Sets</Text>
+                        <Text className="text-violet-900 text-2xl font-bold">{exercise.sets}</Text>
                       </View>
                     )}
                     {exercise.reps && (
                       <View className="flex-1 bg-violet-50 rounded-xl p-3">
-                        <Text className="text-violet-600 text-xs font-semibold mb-1">
-                          Reps
-                        </Text>
-                        <Text className="text-violet-900 text-2xl font-bold">
-                          {exercise.reps}
-                        </Text>
+                        <Text className="text-violet-600 text-xs font-semibold mb-1">Reps</Text>
+                        <Text className="text-violet-900 text-2xl font-bold">{exercise.reps}</Text>
                       </View>
                     )}
                     {exercise.rest_seconds && (
                       <View className="flex-1 bg-violet-50 rounded-xl p-3">
-                        <Text className="text-violet-600 text-xs font-semibold mb-1">
-                          Rest
-                        </Text>
+                        <Text className="text-violet-600 text-xs font-semibold mb-1">Rest</Text>
                         <Text className="text-violet-900 text-2xl font-bold">
                           {exercise.rest_seconds}s
                         </Text>
@@ -329,7 +344,7 @@ export default function SessionDetailsScreen() {
                   </View>
                 )}
 
-                {/* Suggested weight + form tip */}
+                {/* Weight + Notes */}
                 <View className="flex-row gap-2">
                   {exercise.suggested_weight_kg != null && (
                     <View className="bg-violet-50 border border-violet-200 rounded-xl p-3 flex-1">
@@ -351,12 +366,11 @@ export default function SessionDetailsScreen() {
           </View>
         )}
 
-        {/* Feedback Section */}
-        {isCompleted && hasFeedback && (
+        {/* Feedback Display */}
+        {isCompleted && hasFeedback && session.feedback && (
           <View className="mb-6">
             <Text className="text-white text-lg font-bold mb-4">Session Feedback</Text>
 
-            {/* Effort & Energy */}
             <View className="bg-white rounded-2xl p-4 mb-3">
               <Text className="text-xs text-gray-400 uppercase mb-3">Performance</Text>
               <View className="space-y-3">
@@ -377,7 +391,6 @@ export default function SessionDetailsScreen() {
               </View>
             </View>
 
-            {/* Soreness & Pain */}
             {Object.keys(session.feedback.soreness_per_muscle || {}).length > 0 && (
               <View className="bg-white rounded-2xl p-4 mb-3">
                 <Text className="text-xs text-gray-400 uppercase mb-3">Muscle Soreness</Text>
@@ -390,7 +403,6 @@ export default function SessionDetailsScreen() {
               </View>
             )}
 
-            {/* Weights Used */}
             {(session.feedback.weights_used ?? []).length > 0 && (
               <View className="bg-white rounded-2xl p-4 mb-3">
                 <Text className="text-xs text-gray-400 uppercase mb-3">Weights Lifted</Text>
@@ -422,39 +434,44 @@ export default function SessionDetailsScreen() {
 
         {/* Action Buttons */}
         {isPlanned && (
-          <Pressable 
+          <Pressable
             className="bg-white py-4 rounded-2xl items-center mb-3"
             onPress={handleStartSession}
             disabled={startingSession}
           >
-            {startingSession ? (
-              <Text className="text-violet-700 font-extrabold text-lg">Starting...</Text>
-            ) : (
-              <Text className="text-violet-700 font-extrabold text-lg">Start Session</Text>
-            )}
+            <Text className="text-violet-700 font-extrabold text-lg">
+              {startingSession ? 'Starting...' : 'Start Session'}
+            </Text>
           </Pressable>
         )}
 
         {isStarted && (
-          <Pressable 
+          <Pressable
             className="bg-white py-4 rounded-2xl items-center mb-3"
             onPress={handleCompleteSession}
             disabled={completingSession}
           >
-            {completingSession ? (
-              <Text className="text-violet-700 font-extrabold text-lg">Completing...</Text>
-            ) : (
-              <Text className="text-violet-700 font-extrabold text-lg">Complete Session</Text>
-            )}
+            <Text className="text-violet-700 font-extrabold text-lg">
+              {completingSession ? 'Completing...' : 'Complete Session ✓'}
+            </Text>
           </Pressable>
         )}
 
-        {isCompleted && session.feedback == null && (
-          <Pressable 
+        {isCompleted && !hasFeedback && (
+          <Pressable
             className="bg-white py-4 rounded-2xl items-center mb-3"
-            onPress={handleAddFeedback}
+            onPress={() => setFeedbackSheetVisible(true)}
           >
             <Text className="text-violet-700 font-extrabold text-lg">Add Feedback</Text>
+          </Pressable>
+        )}
+
+        {isCompleted && (
+          <Pressable
+            onPress={handleShare}
+            className="bg-violet-600 py-4 rounded-2xl items-center mb-3 flex-row justify-center gap-2"
+          >
+            <Text className="text-white font-bold text-base">⬆️ Share This Workout</Text>
           </Pressable>
         )}
 
@@ -466,13 +483,18 @@ export default function SessionDetailsScreen() {
         </Pressable>
       </ScrollView>
 
-      {/* Feedback Sheet */}
       <FeedbackSheet
         visible={feedbackSheetVisible}
         muscleGroups={muscleGroups}
         exercises={exercises}
         onClose={() => setFeedbackSheetVisible(false)}
         onSubmitFeedback={handleSubmitFeedback}
+      />
+
+      <RestTimer
+        visible={restTimerVisible}
+        defaultSeconds={restTimerSeconds}
+        onClose={() => setRestTimerVisible(false)}
       />
     </View>
   );

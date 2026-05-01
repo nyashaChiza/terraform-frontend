@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, Pressable, FlatList, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import * as StoreReview from 'expo-store-review';
+import * as SecureStore from 'expo-secure-store';
 import { getProfile, createProfile } from '../../services/profiles';
 import { getPlannedSessions, getCompletedSessions } from '../../services/sessions';
 import { generatePlan } from '../../services/planner';
@@ -10,6 +12,9 @@ import GoalSheet from '../../components/GoalSheet';
 import { authStore } from '../../store/auth';
 import { ProfileStore } from 'store/profile';
 import { showError, showSuccess } from '../../services/toast';
+
+const REVIEW_KEY = 'terraform_review_requested';
+const REVIEW_THRESHOLD = 3; // request review after 3rd completed session
 
 type Session = {
   id: number;
@@ -34,6 +39,36 @@ type Session = {
   };
 };
 
+// ── Skeleton card ─────────────────────────────────────────────
+
+function SkeletonCard({ height = 100 }: { height?: number }) {
+  return (
+    <View
+      style={{
+        backgroundColor: 'rgba(255,255,255,0.25)',
+        borderRadius: 24,
+        height,
+        marginBottom: 12,
+      }}
+    />
+  );
+}
+
+function SkeletonRow() {
+  return (
+    <View
+      style={{
+        backgroundColor: 'rgba(255,255,255,0.18)',
+        borderRadius: 16,
+        height: 72,
+        marginBottom: 10,
+      }}
+    />
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+
 const completedSessionsPlaceholder: Session[] = [];
 
 export default function HomeTab() {
@@ -49,7 +84,24 @@ export default function HomeTab() {
   const [generating, setGenerating] = useState(false);
   const [goalSheetVisible, setGoalSheetVisible] = useState(false);
 
-  // Centralized data loading function
+  // ── In-app review ──────────────────────────────────────────
+
+  const maybeRequestReview = async (completedCount: number) => {
+    try {
+      if (completedCount < REVIEW_THRESHOLD) return;
+      const already = await SecureStore.getItemAsync(REVIEW_KEY);
+      if (already) return;
+      const isAvailable = await StoreReview.isAvailableAsync();
+      if (!isAvailable) return;
+      await StoreReview.requestReview();
+      await SecureStore.setItemAsync(REVIEW_KEY, '1');
+    } catch {
+      // Review request is best-effort; never crash on it
+    }
+  };
+
+  // ── Data loading ───────────────────────────────────────────
+
   const loadHomeData = async (showRefreshIndicator = false) => {
     if (showRefreshIndicator) {
       setRefreshing(true);
@@ -58,9 +110,8 @@ export default function HomeTab() {
     }
 
     try {
-      // Load profile
       const profileRes = await getProfile();
-      
+
       if (profileRes.ok) {
         authStore.set({ user: profileRes.body });
         setInitialProfileValues(profileRes.body);
@@ -72,7 +123,7 @@ export default function HomeTab() {
           last_name: last,
           gender: profileRes.body.gender,
           height: profileRes.body.height,
-          weight: profileRes.body.weight
+          weight: profileRes.body.weight,
         });
       } else if (profileRes.status === 404) {
         setProfileSheetVisible(true);
@@ -80,72 +131,47 @@ export default function HomeTab() {
         console.warn('Profile fetch failed:', profileRes);
       }
 
-      // Load planned sessions
       const plannedRes = await getPlannedSessions();
-      if (plannedRes.ok && plannedRes.body) {
-        setPlannedSession(plannedRes.body);
-      } else {
-        setPlannedSession(null);
-      }
+      setPlannedSession(plannedRes.ok && plannedRes.body ? plannedRes.body : null);
 
-      // Load completed sessions
       const completedRes = await getCompletedSessions();
       if (completedRes.ok && Array.isArray(completedRes.body)) {
         setCompletedSessions(completedRes.body);
+        maybeRequestReview(completedRes.body.length);
       } else {
-        console.warn('Failed to fetch completed sessions:', completedRes);
         setCompletedSessions(completedSessionsPlaceholder);
       }
     } catch (error) {
       console.error('Error loading home data:', error);
     } finally {
-      if (showRefreshIndicator) {
-        setRefreshing(false);
-      } else {
-        setCheckingProfile(false);
-      }
+      if (showRefreshIndicator) setRefreshing(false);
+      else setCheckingProfile(false);
     }
   };
 
-  // Initial load
   useEffect(() => {
     let mounted = true;
-
-    const initialLoad = async () => {
-      if (!mounted) return;
-      await loadHomeData(false);
-    };
-
+    const initialLoad = async () => { if (mounted) await loadHomeData(false); };
     initialLoad();
     return () => { mounted = false; };
   }, []);
 
-  // Refresh handler for pull-to-refresh
-  const onRefresh = async () => {
-    await loadHomeData(true);
-  };
+  const onRefresh = async () => loadHomeData(true);
 
   const onProfileSubmit = async (payload: any) => {
-    try {
-      const existingUser = authStore.get().user;
-      let res;
-      if (existingUser) {
-        console.log('Updating profile', payload);
-        res = { ok: true, body: payload };
-      } else {
-        res = await createProfile(payload);
-      }
-
-      if (res.ok) {
-        authStore.set({ user: res.body });
-        setProfileSheetVisible(false);
-        return res;
-      } else {
-        throw new Error(JSON.stringify(res.body));
-      }
-    } catch (err: any) {
-      throw err;
+    const existingUser = authStore.get().user;
+    let res;
+    if (existingUser) {
+      res = { ok: true, body: payload };
+    } else {
+      res = await createProfile(payload);
     }
+    if (res.ok) {
+      authStore.set({ user: res.body });
+      setProfileSheetVisible(false);
+      return res;
+    }
+    throw new Error(JSON.stringify(res.body));
   };
 
   const onGenerateSession = async () => {
@@ -153,88 +179,94 @@ export default function HomeTab() {
     try {
       const res = await generatePlan();
       if (res.ok) {
-        showSuccess('Session Generated', 'Your personalized session has been created.');
-        // Refresh data to show new plan
+        showSuccess('Session Generated', 'Your personalised session has been created.');
         await loadHomeData(false);
       } else if (res?.body?.detail === 'User has no goals') {
         setGoalSheetVisible(true);
       } else {
-        console.warn('Generate failed', res);
         showError('Generation Failed', 'Could not generate a session. Please try again later.');
       }
-    } catch (err) {
-      console.error('Generate error', err);
+    } catch {
       showError('Generation Error', 'An error occurred while generating the session.');
     } finally {
       setGenerating(false);
     }
   };
 
-  const handleGoalCreated = async (goal: any) => {
+  const handleGoalCreated = async () => {
     setGoalSheetVisible(false);
     setGenerating(true);
     try {
-      const res = await generatePlan();
-      console.log('Re-generated plan after goal creation:', res);
-      // Refresh data to show new plan
+      await generatePlan();
       await loadHomeData(false);
     } finally {
       setGenerating(false);
     }
   };
 
+  // ── Render ─────────────────────────────────────────────────
+
   return (
     <View className="flex-1 bg-violet-700">
-
-      {/* ── Static top section — never scrolls ── */}
+      {/* Static top section */}
       <View className="px-5" style={{ paddingTop: insets.top + 16 }}>
-        {/* Greeting */}
         <Text className="text-white text-3xl font-extrabold">
-          Hie {displayName ? displayName : '👋'}
+          Hey {displayName || '👋'}
         </Text>
-        <Text className="text-violet-200 mb-8">
-          Ready for your next session?
-        </Text>
+        <Text className="text-violet-200 mb-6">Ready for your next session?</Text>
 
-        {/* Planned Session card */}
-        {plannedSession ? (
+        {/* Planned Session / Skeleton */}
+        {checkingProfile ? (
+          <SkeletonCard height={120} />
+        ) : plannedSession ? (
           <Pressable
-            onPress={() => {
+            onPress={() =>
               router.push({
                 pathname: '/(tabs)/session-details',
                 params: { session: JSON.stringify(plannedSession) },
-              });
-            }}
+              })
+            }
             className="bg-white rounded-3xl p-6 mb-6"
           >
             <Text className="text-xs text-gray-400 uppercase mb-1">Planned Session</Text>
             <Text className="text-2xl font-extrabold text-violet-800">{plannedSession.title}</Text>
-            <Text className="text-gray-500 mt-3">⏱ {plannedSession.duration ?? '45 min'}</Text>
+            <View className="flex-row items-center gap-3 mt-3">
+              {plannedSession.plan_payload?.estimated_duration_minutes && (
+                <Text className="text-gray-500 text-sm">
+                  ⏱ {plannedSession.plan_payload.estimated_duration_minutes} min
+                </Text>
+              )}
+              {plannedSession.plan_payload?.intensity && (
+                <View className="bg-violet-100 px-2 py-0.5 rounded-full">
+                  <Text className="text-violet-700 text-xs font-semibold">
+                    {plannedSession.plan_payload.intensity}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Text className="text-violet-600 text-sm font-semibold mt-3">Tap to view →</Text>
           </Pressable>
         ) : (
           <View className="bg-white rounded-3xl p-6 mb-6">
             <Text className="text-xl font-extrabold text-violet-800 mb-2">No planned session</Text>
             <Text className="text-gray-500 mb-5">
-              Generate a personalized workout plan for today
+              Generate a personalised AI workout plan for today
             </Text>
             <Pressable onPress={onGenerateSession} className="bg-violet-700 py-4 rounded-2xl items-center">
-              {generating ? (
-                <Text className="text-white font-bold text-base">Generating...</Text>
-              ) : (
-                <Text className="text-white font-bold text-base">Generate Session</Text>
-              )}
+              <Text className="text-white font-bold text-base">
+                {generating ? 'Generating...' : '✨ Generate Session'}
+              </Text>
             </Pressable>
           </View>
         )}
 
-        {/* Completed Sessions label */}
         <Text className="text-white text-lg font-bold mb-3">Completed Sessions</Text>
       </View>
 
-      {/* ── Independently scrolling sessions list ── */}
+      {/* Scrolling sessions list */}
       <FlatList
-        data={completedSessions}
-        keyExtractor={(item) => item.id.toString()}
+        data={checkingProfile ? [] : completedSessions}
+        keyExtractor={item => item.id.toString()}
         showsVerticalScrollIndicator={false}
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 140 }}
@@ -246,53 +278,74 @@ export default function HomeTab() {
             colors={['#7c3aed']}
           />
         }
+        ListHeaderComponent={
+          checkingProfile ? (
+            <View>
+              <SkeletonRow />
+              <SkeletonRow />
+              <SkeletonRow />
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
           !checkingProfile ? (
             <View className="items-center mt-10">
               <Text className="text-violet-200 text-sm">No completed sessions yet</Text>
+              <Text className="text-violet-300 text-xs mt-1">
+                Complete a session to see it here
+              </Text>
             </View>
           ) : null
         }
         renderItem={({ item }) => {
           const title = item.plan_payload?.title || item.title || `Session #${item.id}`;
-          const summary = item.plan_payload?.summary || item.summary || '';
           const rawDate = item.completed_at ?? item.updated ?? item.created;
           const dateLabel = rawDate
-            ? new Date(rawDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+            ? new Date(rawDate).toLocaleDateString('en-GB', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              })
             : '';
-          const duration = item.plan_payload?.estimated_duration_minutes ?? item.estimated_duration_minutes;
-          const exercisesCount = item.plan_payload?.exercises?.length ?? item.exercises?.length ?? 0;
+          const duration =
+            item.plan_payload?.estimated_duration_minutes ?? item.estimated_duration_minutes;
+          const exercisesCount =
+            item.plan_payload?.exercises?.length ?? item.exercises?.length ?? 0;
+          const summary = item.plan_payload?.summary || item.summary || '';
 
           return (
             <Pressable
-              onPress={() => {
+              onPress={() =>
                 router.push({
                   pathname: '/(tabs)/session-details',
                   params: { session: JSON.stringify(item) },
-                });
-              }}
+                })
+              }
               className="bg-white/95 rounded-2xl p-4 mb-3"
             >
               <Text className="font-bold text-violet-800">{title}</Text>
               <Text className="text-gray-500 text-xs mt-1">
-                {dateLabel} {duration ? `• ${duration} min` : ''} {exercisesCount ? `• ${exercisesCount} exercises` : ''}
+                {dateLabel}
+                {duration ? ` • ${duration} min` : ''}
+                {exercisesCount ? ` • ${exercisesCount} exercises` : ''}
               </Text>
               {summary ? (
-                <Text className="text-gray-600 text-sm mt-2" numberOfLines={2}>{summary}</Text>
+                <Text className="text-gray-600 text-sm mt-2" numberOfLines={2}>
+                  {summary}
+                </Text>
               ) : null}
-              <Text className="text-green-600 text-xs mt-2">✓ Completed</Text>
+              <Text className="text-green-600 text-xs mt-2 font-semibold">✓ Completed</Text>
             </Pressable>
           );
         }}
       />
 
-      {/* Profile Sheet */}
       <ProfileSheet
         visible={profileSheetVisible}
         initialValues={initialProfileValues}
         mode={initialProfileValues ? 'update' : 'create'}
         onSubmitProfile={onProfileSubmit}
-        onSuccess={(profile) => {
+        onSuccess={profile => {
           authStore.set({ user: profile });
           setProfileSheetVisible(false);
         }}

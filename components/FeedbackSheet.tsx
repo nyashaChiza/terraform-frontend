@@ -56,19 +56,25 @@ export default function FeedbackSheet({ visible, muscleGroups, exercises, onClos
   useEffect(() => {
     if (muscleGroups.length > 0) {
       const initialSoreness: Record<string, number> = {};
-      muscleGroups.forEach(muscle => { initialSoreness[muscle] = 1; });
+      // Trim whitespace and skip empty/whitespace-only muscle names
+      muscleGroups
+        .map(m => m.trim())
+        .filter(m => m.length > 0)
+        .forEach(muscle => { initialSoreness[muscle] = 1; });
       setForm(prev => ({ ...prev, soreness_per_muscle: initialSoreness }));
     }
   }, [muscleGroups]);
 
-  // Pre-fill weights from suggested_weight_kg
+  // Pre-fill weights from suggested_weight_kg — only include exercises with valid IDs
   useEffect(() => {
     if (exercises.length > 0) {
-      const initialWeights: ExerciseWeight[] = exercises.map(ex => ({
-        exercise_id: ex.exercise_id,
-        name: ex.name,
-        weight_kg: ex.suggested_weight_kg ?? 0,
-      }));
+      const initialWeights: ExerciseWeight[] = exercises
+        .filter(ex => ex.exercise_id != null && ex.name)
+        .map(ex => ({
+          exercise_id: ex.exercise_id as number,
+          name: String(ex.name),
+          weight_kg: ex.suggested_weight_kg ?? 0,
+        }));
       setForm(prev => ({ ...prev, weights_used: initialWeights }));
     }
   }, [exercises]);

@@ -27,11 +27,12 @@ export async function completeSession(sessionId: number, feedback?: any) {
 }
 
 export async function addFeedback(sessionId: number, feedback: {
-  soreness_per_muscle: Record<string, number>;
+  soreness_per_muscle?: Record<string, number>;
   joint_pain: boolean;
   effort_rating: number;
   energy_level: number;
-  summary: string;
+  summary?: string;
+  weights_used?: { exercise_id: number; name: string; weight_kg: number }[];
 }) {
   return apiFetch(`/api/sessions/${sessionId}/feedback`, {
     method: 'POST',
