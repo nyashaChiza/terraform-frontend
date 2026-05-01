@@ -85,18 +85,22 @@ export default function GoalSheet({ visible, onClose, mode = 'create', goalId, i
 
     setLoading(true);
     try {
-      const payload = {
+      const basePayload = {
         type,
         description,
         target_value: Number(targetValue),
-        starting_value: Number(startingValue) || 0,
         start_date: startDate,
         due_date: dueDate,
       };
 
+      // starting_value is immutable after creation — never send it on update
+      const payload = mode === 'create'
+        ? { ...basePayload, starting_value: Number(startingValue) || 0 }
+        : basePayload;
+
       let res;
       if (mode === 'update' && goalId != null) {
-        res = await updateGoal(goalId, payload as any);
+        res = await updateGoal(goalId, basePayload as any);
       } else {
         res = await createGoal(payload as any);
       }

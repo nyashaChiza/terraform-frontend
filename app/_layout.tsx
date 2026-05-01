@@ -4,15 +4,16 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { AlertNotificationRoot } from 'react-native-alert-notification';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { authStore } from '../store/auth';
 
-// KEEP splash visible
+// KEEP splash visible until we're ready
 SplashScreen.preventAutoHideAsync();
 
 export default function Layout() {
   useEffect(() => {
-    // Simulate loading or wait for fonts/auth/etc
     const prepare = async () => {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Restore persisted auth tokens before the app renders any screen
+      await authStore.hydrate();
       await SplashScreen.hideAsync();
     };
 

@@ -82,9 +82,8 @@ export default function HomeTab() {
 
       // Load planned sessions
       const plannedRes = await getPlannedSessions();
-      if (plannedRes.body && plannedRes.body.detail != 'No planned sessions found') {
-        const session = plannedRes.body;
-        setPlannedSession(session);
+      if (plannedRes.ok && plannedRes.body) {
+        setPlannedSession(plannedRes.body);
       } else {
         setPlannedSession(null);
       }
@@ -113,11 +112,7 @@ export default function HomeTab() {
     let mounted = true;
 
     const initialLoad = async () => {
-      setCheckingProfile(true);
-      // Let home screen breathe for 1 second
-      await new Promise(resolve => setTimeout(resolve, 1000));
       if (!mounted) return;
-      
       await loadHomeData(false);
     };
 
@@ -261,8 +256,10 @@ export default function HomeTab() {
         renderItem={({ item }) => {
           const title = item.plan_payload?.title || item.title || `Session #${item.id}`;
           const summary = item.plan_payload?.summary || item.summary || '';
-          const date = item.updated || item.created || item.actual_date;
-          const dateLabel = item.completed_date ? new Date(date).toLocaleDateString() : '';
+          const rawDate = item.completed_at ?? item.updated ?? item.created;
+          const dateLabel = rawDate
+            ? new Date(rawDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+            : '';
           const duration = item.plan_payload?.estimated_duration_minutes ?? item.estimated_duration_minutes;
           const exercisesCount = item.plan_payload?.exercises?.length ?? item.exercises?.length ?? 0;
 

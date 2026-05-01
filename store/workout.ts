@@ -13,4 +13,8 @@ export const workoutStore = {
     workouts = [...workouts, w];
     return workouts;
   },
+  reset: () => {
+    workouts = [];
+    return workouts;
+  },
 };
