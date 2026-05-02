@@ -1,5 +1,13 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, Pressable, FlatList, RefreshControl } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  Pressable,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as StoreReview from 'expo-store-review';
@@ -14,62 +22,38 @@ import { ProfileStore } from 'store/profile';
 import { showError, showSuccess } from '../../services/toast';
 
 const REVIEW_KEY = 'terraform_review_requested';
-const REVIEW_THRESHOLD = 3; // request review after 3rd completed session
+const REVIEW_THRESHOLD = 3;
 
 type Session = {
   id: number;
-  session_id: number;
   status: string;
-  actual_date: string;
-  completed: boolean;
+  title: string;
   created: string;
   updated: string;
-  title: string;
+  completed_at?: string;
   exercises: any[];
-  feedback: {
-    soreness_per_muscle: Record<string, number>;
-    joint_pain: boolean;
-    effort_rating: number;
-    energy_level: number;
-    summary: string;
-    id: number;
-    logged_session_id: number;
-    created: string;
-    updated: string;
+  plan_payload?: {
+    title?: string;
+    summary?: string;
+    estimated_duration_minutes?: number;
+    intensity?: string;
+    exercises?: any[];
   };
+  estimated_duration_minutes?: number;
+  feedback?: any;
 };
 
-// ── Skeleton card ─────────────────────────────────────────────
+// ── Skeleton placeholder ────────────────────────────────────
 
-function SkeletonCard({ height = 100 }: { height?: number }) {
+function SkeletonCard({ height }: { height: number }) {
   return (
-    <View
-      style={{
-        backgroundColor: 'rgba(255,255,255,0.25)',
-        borderRadius: 24,
-        height,
-        marginBottom: 12,
-      }}
-    />
-  );
-}
-
-function SkeletonRow() {
-  return (
-    <View
-      style={{
-        backgroundColor: 'rgba(255,255,255,0.18)',
-        borderRadius: 16,
-        height: 72,
-        marginBottom: 10,
-      }}
-    />
+    <View style={[styles.skeletonCard, { height }]} />
   );
 }
 
 // ─────────────────────────────────────────────────────────────
 
-const completedSessionsPlaceholder: Session[] = [];
+const EMPTY_SESSIONS: Session[] = [];
 
 export default function HomeTab() {
   const router = useRouter();
@@ -84,51 +68,33 @@ export default function HomeTab() {
   const [generating, setGenerating] = useState(false);
   const [goalSheetVisible, setGoalSheetVisible] = useState(false);
 
-  // ── In-app review ──────────────────────────────────────────
-
-  const maybeRequestReview = async (completedCount: number) => {
+  const maybeRequestReview = async (count: number) => {
     try {
-      if (completedCount < REVIEW_THRESHOLD) return;
+      if (count < REVIEW_THRESHOLD) return;
       const already = await SecureStore.getItemAsync(REVIEW_KEY);
       if (already) return;
-      const isAvailable = await StoreReview.isAvailableAsync();
-      if (!isAvailable) return;
+      const available = await StoreReview.isAvailableAsync();
+      if (!available) return;
       await StoreReview.requestReview();
       await SecureStore.setItemAsync(REVIEW_KEY, '1');
-    } catch {
-      // Review request is best-effort; never crash on it
-    }
+    } catch { /* best-effort */ }
   };
 
-  // ── Data loading ───────────────────────────────────────────
-
-  const loadHomeData = async (showRefreshIndicator = false) => {
-    if (showRefreshIndicator) {
-      setRefreshing(true);
-    } else {
-      setCheckingProfile(true);
-    }
+  const loadHomeData = async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setCheckingProfile(true);
 
     try {
       const profileRes = await getProfile();
-
       if (profileRes.ok) {
         authStore.set({ user: profileRes.body });
         setInitialProfileValues(profileRes.body);
-        const first = profileRes.body.first_name ?? profileRes.body.firstName ?? profileRes.body.first ?? '';
-        const last = profileRes.body.last_name ?? profileRes.body.lastName ?? profileRes.body.last ?? '';
+        const first = profileRes.body.first_name ?? profileRes.body.firstName ?? '';
+        const last  = profileRes.body.last_name  ?? profileRes.body.lastName  ?? '';
         setDisplayName([first, last].filter(Boolean).join(' '));
-        ProfileStore.set({
-          first_name: first,
-          last_name: last,
-          gender: profileRes.body.gender,
-          height: profileRes.body.height,
-          weight: profileRes.body.weight,
-        });
+        ProfileStore.set({ first_name: first, last_name: last, gender: profileRes.body.gender, height: profileRes.body.height, weight: profileRes.body.weight });
       } else if (profileRes.status === 404) {
         setProfileSheetVisible(true);
-      } else {
-        console.warn('Profile fetch failed:', profileRes);
       }
 
       const plannedRes = await getPlannedSessions();
@@ -139,131 +105,126 @@ export default function HomeTab() {
         setCompletedSessions(completedRes.body);
         maybeRequestReview(completedRes.body.length);
       } else {
-        setCompletedSessions(completedSessionsPlaceholder);
+        setCompletedSessions(EMPTY_SESSIONS);
       }
-    } catch (error) {
-      console.error('Error loading home data:', error);
+    } catch (e) {
+      console.error('Home load error', e);
     } finally {
-      if (showRefreshIndicator) setRefreshing(false);
+      if (isRefresh) setRefreshing(false);
       else setCheckingProfile(false);
     }
   };
 
   useEffect(() => {
     let mounted = true;
-    const initialLoad = async () => { if (mounted) await loadHomeData(false); };
-    initialLoad();
+    (async () => { if (mounted) await loadHomeData(false); })();
     return () => { mounted = false; };
   }, []);
-
-  const onRefresh = async () => loadHomeData(true);
-
-  const onProfileSubmit = async (payload: any) => {
-    const existingUser = authStore.get().user;
-    let res;
-    if (existingUser) {
-      res = { ok: true, body: payload };
-    } else {
-      res = await createProfile(payload);
-    }
-    if (res.ok) {
-      authStore.set({ user: res.body });
-      setProfileSheetVisible(false);
-      return res;
-    }
-    throw new Error(JSON.stringify(res.body));
-  };
 
   const onGenerateSession = async () => {
     setGenerating(true);
     try {
       const res = await generatePlan();
       if (res.ok) {
-        showSuccess('Session Generated', 'Your personalised session has been created.');
+        showSuccess('Session Generated', 'Your personalised session is ready.');
         await loadHomeData(false);
       } else if (res?.body?.detail === 'User has no goals') {
         setGoalSheetVisible(true);
       } else {
-        showError('Generation Failed', 'Could not generate a session. Please try again later.');
+        showError('Generation Failed', 'Could not generate a session. Please try again.');
       }
     } catch {
-      showError('Generation Error', 'An error occurred while generating the session.');
+      showError('Generation Error', 'An unexpected error occurred.');
     } finally {
       setGenerating(false);
     }
   };
-
-  const handleGoalCreated = async () => {
-    setGoalSheetVisible(false);
-    setGenerating(true);
-    try {
-      await generatePlan();
-      await loadHomeData(false);
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  // ── Render ─────────────────────────────────────────────────
 
   return (
-    <View className="flex-1 bg-violet-700">
-      {/* Static top section */}
-      <View className="px-5" style={{ paddingTop: insets.top + 16 }}>
-        <Text className="text-white text-3xl font-extrabold">
-          Hey {displayName || '👋'}
+    <View style={{ flex: 1, backgroundColor: '#7c3aed' }}>
+      {/* Fixed top section */}
+      <View style={[styles.topSection, { paddingTop: insets.top + 16 }]}>
+        {/* Greeting */}
+        <Text style={styles.greeting}>
+          {displayName ? `Hey, ${displayName.split(' ')[0]}` : 'Welcome back'}
         </Text>
-        <Text className="text-violet-200 mb-6">Ready for your next session?</Text>
+        <Text style={styles.greetingSub}>Ready for today's session?</Text>
 
-        {/* Planned Session / Skeleton */}
+        {/* Planned session card / skeleton / generate */}
         {checkingProfile ? (
-          <SkeletonCard height={120} />
+          <SkeletonCard height={116} />
         ) : plannedSession ? (
           <Pressable
-            onPress={() =>
-              router.push({
-                pathname: '/(tabs)/session-details',
-                params: { session: JSON.stringify(plannedSession) },
-              })
-            }
-            className="bg-white rounded-3xl p-6 mb-6"
+            onPress={() => router.push({
+              pathname: '/(tabs)/session-details',
+              params: { session: JSON.stringify(plannedSession) },
+            })}
+            style={styles.sessionCard}
           >
-            <Text className="text-xs text-gray-400 uppercase mb-1">Planned Session</Text>
-            <Text className="text-2xl font-extrabold text-violet-800">{plannedSession.title}</Text>
-            <View className="flex-row items-center gap-3 mt-3">
-              {plannedSession.plan_payload?.estimated_duration_minutes && (
-                <Text className="text-gray-500 text-sm">
-                  ⏱ {plannedSession.plan_payload.estimated_duration_minutes} min
-                </Text>
-              )}
+            <View style={styles.sessionCardTop}>
+              <View style={styles.sessionCardLabel}>
+                <Ionicons name="time-outline" size={12} color="#7c3aed" />
+                <Text style={styles.sessionCardLabelTxt}>Planned Session</Text>
+              </View>
               {plannedSession.plan_payload?.intensity && (
-                <View className="bg-violet-100 px-2 py-0.5 rounded-full">
-                  <Text className="text-violet-700 text-xs font-semibold">
-                    {plannedSession.plan_payload.intensity}
-                  </Text>
+                <View style={styles.intensityBadge}>
+                  <Text style={styles.intensityBadgeTxt}>{plannedSession.plan_payload.intensity}</Text>
                 </View>
               )}
             </View>
-            <Text className="text-violet-600 text-sm font-semibold mt-3">Tap to view →</Text>
+            <Text style={styles.sessionTitle} numberOfLines={2}>
+              {plannedSession.plan_payload?.title || plannedSession.title}
+            </Text>
+            <View style={styles.sessionMeta}>
+              {plannedSession.plan_payload?.estimated_duration_minutes && (
+                <View style={styles.sessionMetaItem}>
+                  <Ionicons name="time-outline" size={13} color="#9ca3af" />
+                  <Text style={styles.sessionMetaTxt}>
+                    {plannedSession.plan_payload.estimated_duration_minutes} min
+                  </Text>
+                </View>
+              )}
+              {plannedSession.plan_payload?.exercises?.length > 0 && (
+                <View style={styles.sessionMetaItem}>
+                  <Ionicons name="list-outline" size={13} color="#9ca3af" />
+                  <Text style={styles.sessionMetaTxt}>
+                    {plannedSession.plan_payload.exercises.length} exercises
+                  </Text>
+                </View>
+              )}
+              <View style={styles.sessionTap}>
+                <Text style={styles.sessionTapTxt}>View details</Text>
+                <Ionicons name="chevron-forward" size={12} color="#7c3aed" />
+              </View>
+            </View>
           </Pressable>
         ) : (
-          <View className="bg-white rounded-3xl p-6 mb-6">
-            <Text className="text-xl font-extrabold text-violet-800 mb-2">No planned session</Text>
-            <Text className="text-gray-500 mb-5">
-              Generate a personalised AI workout plan for today
-            </Text>
-            <Pressable onPress={onGenerateSession} className="bg-violet-700 py-4 rounded-2xl items-center">
-              <Text className="text-white font-bold text-base">
-                {generating ? 'Generating...' : '✨ Generate Session'}
-              </Text>
+          <View style={styles.generateCard}>
+            <View style={styles.generateIcon}>
+              <Ionicons name="sparkles-outline" size={24} color="#7c3aed" />
+            </View>
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <Text style={styles.generateTitle}>No session planned</Text>
+              <Text style={styles.generateSub}>Generate an AI-personalised workout now</Text>
+            </View>
+            <Pressable
+              onPress={onGenerateSession}
+              disabled={generating}
+              style={[styles.generateBtn, generating && { opacity: 0.7 }]}
+            >
+              {generating ? (
+                <Text style={styles.generateBtnTxt}>Generating...</Text>
+              ) : (
+                <Text style={styles.generateBtnTxt}>Generate</Text>
+              )}
             </Pressable>
           </View>
         )}
 
-        <Text className="text-white text-lg font-bold mb-3">Completed Sessions</Text>
+        <Text style={styles.completedLabel}>Completed Sessions</Text>
       </View>
 
-      {/* Scrolling sessions list */}
+      {/* Scrollable completed sessions */}
       <FlatList
         data={checkingProfile ? [] : completedSessions}
         keyExtractor={item => item.id.toString()}
@@ -273,26 +234,29 @@ export default function HomeTab() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#ffffff"
+            onRefresh={() => loadHomeData(true)}
+            tintColor="#fff"
             colors={['#7c3aed']}
           />
         }
         ListHeaderComponent={
           checkingProfile ? (
-            <View>
-              <SkeletonRow />
-              <SkeletonRow />
-              <SkeletonRow />
+            <View style={{ gap: 8 }}>
+              <SkeletonCard height={68} />
+              <SkeletonCard height={68} />
+              <SkeletonCard height={68} />
             </View>
           ) : null
         }
         ListEmptyComponent={
           !checkingProfile ? (
-            <View className="items-center mt-10">
-              <Text className="text-violet-200 text-sm">No completed sessions yet</Text>
-              <Text className="text-violet-300 text-xs mt-1">
-                Complete a session to see it here
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIcon}>
+                <Ionicons name="barbell-outline" size={28} color="#a78bfa" />
+              </View>
+              <Text style={styles.emptyTitle}>No completed sessions yet</Text>
+              <Text style={styles.emptySub}>
+                Start and complete your first session to see it here
               </Text>
             </View>
           ) : null
@@ -301,40 +265,48 @@ export default function HomeTab() {
           const title = item.plan_payload?.title || item.title || `Session #${item.id}`;
           const rawDate = item.completed_at ?? item.updated ?? item.created;
           const dateLabel = rawDate
-            ? new Date(rawDate).toLocaleDateString('en-GB', {
-                day: 'numeric',
-                month: 'short',
-                year: 'numeric',
-              })
+            ? new Date(rawDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
             : '';
-          const duration =
-            item.plan_payload?.estimated_duration_minutes ?? item.estimated_duration_minutes;
-          const exercisesCount =
-            item.plan_payload?.exercises?.length ?? item.exercises?.length ?? 0;
-          const summary = item.plan_payload?.summary || item.summary || '';
+          const duration = item.plan_payload?.estimated_duration_minutes ?? item.estimated_duration_minutes;
+          const exercisesCount = item.plan_payload?.exercises?.length ?? item.exercises?.length ?? 0;
 
           return (
             <Pressable
-              onPress={() =>
-                router.push({
-                  pathname: '/(tabs)/session-details',
-                  params: { session: JSON.stringify(item) },
-                })
-              }
-              className="bg-white/95 rounded-2xl p-4 mb-3"
+              onPress={() => router.push({
+                pathname: '/(tabs)/session-details',
+                params: { session: JSON.stringify(item) },
+              })}
+              style={styles.completedCard}
             >
-              <Text className="font-bold text-violet-800">{title}</Text>
-              <Text className="text-gray-500 text-xs mt-1">
-                {dateLabel}
-                {duration ? ` • ${duration} min` : ''}
-                {exercisesCount ? ` • ${exercisesCount} exercises` : ''}
-              </Text>
-              {summary ? (
-                <Text className="text-gray-600 text-sm mt-2" numberOfLines={2}>
-                  {summary}
-                </Text>
-              ) : null}
-              <Text className="text-green-600 text-xs mt-2 font-semibold">✓ Completed</Text>
+              <View style={styles.completedCardLeft}>
+                <View style={styles.completedCheck}>
+                  <Ionicons name="checkmark" size={14} color="#16a34a" />
+                </View>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.completedTitle} numberOfLines={1}>{title}</Text>
+                <View style={styles.completedMeta}>
+                  {dateLabel && (
+                    <View style={styles.completedMetaItem}>
+                      <Ionicons name="calendar-outline" size={11} color="#9ca3af" />
+                      <Text style={styles.completedMetaTxt}>{dateLabel}</Text>
+                    </View>
+                  )}
+                  {duration ? (
+                    <View style={styles.completedMetaItem}>
+                      <Ionicons name="time-outline" size={11} color="#9ca3af" />
+                      <Text style={styles.completedMetaTxt}>{duration} min</Text>
+                    </View>
+                  ) : null}
+                  {exercisesCount > 0 ? (
+                    <View style={styles.completedMetaItem}>
+                      <Ionicons name="list-outline" size={11} color="#9ca3af" />
+                      <Text style={styles.completedMetaTxt}>{exercisesCount} exercises</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#d1d5db" />
             </Pressable>
           );
         }}
@@ -344,7 +316,17 @@ export default function HomeTab() {
         visible={profileSheetVisible}
         initialValues={initialProfileValues}
         mode={initialProfileValues ? 'update' : 'create'}
-        onSubmitProfile={onProfileSubmit}
+        onSubmitProfile={async (payload) => {
+          const existingUser = authStore.get().user;
+          const res = existingUser ? { ok: true, body: payload } : await createProfile(payload);
+          if (res.ok) {
+            authStore.set({ user: res.body });
+            setProfileSheetVisible(false);
+          } else {
+            throw new Error(JSON.stringify(res.body));
+          }
+          return res;
+        }}
         onSuccess={profile => {
           authStore.set({ user: profile });
           setProfileSheetVisible(false);
@@ -353,8 +335,202 @@ export default function HomeTab() {
       <GoalSheet
         visible={goalSheetVisible}
         onClose={() => setGoalSheetVisible(false)}
-        onCreated={handleGoalCreated}
+        onCreated={async () => {
+          setGoalSheetVisible(false);
+          setGenerating(true);
+          try { await generatePlan(); await loadHomeData(false); }
+          finally { setGenerating(false); }
+        }}
       />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  topSection: {
+    paddingHorizontal: 20,
+    paddingBottom: 4,
+  },
+  greeting: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '800',
+  },
+  greetingSub: {
+    color: '#c4b5fd',
+    fontSize: 14,
+    marginTop: 2,
+    marginBottom: 16,
+  },
+  skeletonCard: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 20,
+    marginBottom: 14,
+  },
+  // Planned session card
+  sessionCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 16,
+    shadowColor: '#4c1d95',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 5,
+  },
+  sessionCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  sessionCardLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  sessionCardLabelTxt: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#7c3aed',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  intensityBadge: {
+    backgroundColor: '#f5f3ff',
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  intensityBadgeTxt: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#7c3aed',
+  },
+  sessionTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#1f2937',
+    marginBottom: 10,
+    lineHeight: 26,
+  },
+  sessionMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  sessionMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  sessionMetaTxt: { fontSize: 12, color: '#9ca3af' },
+  sessionTap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginLeft: 'auto' as any,
+  },
+  sessionTapTxt: { fontSize: 12, color: '#7c3aed', fontWeight: '700' },
+  // Generate card
+  generateCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#4c1d95',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
+    elevation: 4,
+  },
+  generateIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: '#f5f3ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  generateTitle: { fontSize: 15, fontWeight: '700', color: '#1f2937' },
+  generateSub: { fontSize: 13, color: '#9ca3af', marginTop: 2 },
+  generateBtn: {
+    backgroundColor: '#7c3aed',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+    marginLeft: 10,
+  },
+  generateBtnTxt: { fontSize: 13, fontWeight: '800', color: '#fff' },
+  completedLabel: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '800',
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  // Completed session rows
+  completedCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#4c1d95',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  completedCardLeft: {
+    marginRight: 12,
+  },
+  completedCheck: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#dcfce7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  completedTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  completedMeta: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  completedMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  completedMetaTxt: { fontSize: 11, color: '#9ca3af' },
+  // Empty state
+  emptyState: {
+    alignItems: 'center',
+    marginTop: 40,
+    gap: 8,
+  },
+  emptyIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  emptyTitle: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  emptySub: { color: '#c4b5fd', fontSize: 13, textAlign: 'center', lineHeight: 19 },
+});

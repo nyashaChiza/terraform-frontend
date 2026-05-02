@@ -5,62 +5,46 @@ import {
   ScrollView,
   RefreshControl,
   Pressable,
-  ActivityIndicator,
+  StyleSheet,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getStatsSummary, StatsSummary } from '../../services/stats';
 
 // ─── Skeleton ──────────────────────────────────────────────────────────────
 
-function SkeletonBox({ w, h, rounded }: { w: string | number; h: number; rounded?: number }) {
-  return (
-    <View
-      style={{
-        width: w as any,
-        height: h,
-        borderRadius: rounded ?? 8,
-        backgroundColor: '#e5e7eb',
-        opacity: 0.7,
-      }}
-    />
-  );
+function Skeleton({ style }: { style?: any }) {
+  return <View style={[styles.skeleton, style]} />;
 }
 
-// ─── Bar Chart ─────────────────────────────────────────────────────────────
+// ─── Weekly Bar Chart ──────────────────────────────────────────────────────
 
 function WeeklyChart({ data }: { data: { label: string; count: number }[] }) {
   const max = Math.max(...data.map(d => d.count), 1);
-  const BAR_MAX_H = 72;
+  const BAR_MAX_H = 68;
 
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 4, paddingTop: 8 }}>
+    <View style={styles.chartRow}>
       {data.map((week, i) => {
-        const barH = Math.max((week.count / max) * BAR_MAX_H, week.count > 0 ? 6 : 2);
+        const filled = week.count > 0;
+        const barH = filled ? Math.max((week.count / max) * BAR_MAX_H, 8) : 4;
         const isLatest = i === data.length - 1;
         return (
-          <View key={i} style={{ flex: 1, alignItems: 'center' }}>
-            {week.count > 0 && (
-              <Text style={{ fontSize: 9, color: '#7c3aed', fontWeight: '700', marginBottom: 2 }}>
+          <View key={i} style={styles.chartCol}>
+            {filled && (
+              <Text style={[styles.barLabel, isLatest && styles.barLabelActive]}>
                 {week.count}
               </Text>
             )}
             <View
-              style={{
-                width: '72%',
-                height: barH,
-                borderRadius: 4,
-                backgroundColor: week.count > 0
-                  ? (isLatest ? '#7c3aed' : '#c4b5fd')
-                  : '#e5e7eb',
-              }}
+              style={[
+                styles.bar,
+                { height: barH },
+                filled ? (isLatest ? styles.barActive : styles.barFilled) : styles.barEmpty,
+              ]}
             />
             <Text
-              style={{
-                fontSize: 9,
-                color: isLatest ? '#7c3aed' : '#9ca3af',
-                fontWeight: isLatest ? '700' : '400',
-                marginTop: 4,
-              }}
+              style={[styles.chartXLabel, isLatest && styles.chartXLabelActive]}
               numberOfLines={1}
             >
               {week.label}
@@ -72,7 +56,32 @@ function WeeklyChart({ data }: { data: { label: string; count: number }[] }) {
   );
 }
 
-// ─── Main Component ────────────────────────────────────────────────────────
+// ─── Rank Icon ─────────────────────────────────────────────────────────────
+
+function RankBadge({ rank }: { rank: number }) {
+  if (rank === 0) return (
+    <View style={[styles.rankBadge, { backgroundColor: '#fef3c7' }]}>
+      <Ionicons name="trophy" size={13} color="#d97706" />
+    </View>
+  );
+  if (rank === 1) return (
+    <View style={[styles.rankBadge, { backgroundColor: '#f3f4f6' }]}>
+      <Ionicons name="ribbon" size={13} color="#9ca3af" />
+    </View>
+  );
+  if (rank === 2) return (
+    <View style={[styles.rankBadge, { backgroundColor: '#fff7ed' }]}>
+      <Ionicons name="ribbon" size={13} color="#c2410c" />
+    </View>
+  );
+  return (
+    <View style={[styles.rankBadge, { backgroundColor: '#f9fafb' }]}>
+      <Text style={{ fontSize: 11, color: '#9ca3af', fontWeight: '700' }}>{rank + 1}</Text>
+    </View>
+  );
+}
+
+// ─── Main Screen ───────────────────────────────────────────────────────────
 
 export default function ProgressTab() {
   const insets = useSafeAreaInsets();
@@ -85,14 +94,10 @@ export default function ProgressTab() {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError(false);
-
     try {
       const res = await getStatsSummary();
-      if (res.ok && res.body) {
-        setStats(res.body);
-      } else {
-        setError(true);
-      }
+      if (res.ok && res.body) setStats(res.body);
+      else setError(true);
     } catch {
       setError(true);
     } finally {
@@ -103,21 +108,14 @@ export default function ProgressTab() {
 
   useEffect(() => { loadStats(); }, [loadStats]);
 
-  const streakEmoji = (n: number) => {
-    if (n >= 7) return '🔥🔥';
-    if (n >= 3) return '🔥';
-    if (n >= 1) return '✨';
-    return '💤';
-  };
+  const streakColor = (n: number) => n >= 7 ? '#dc2626' : n >= 3 ? '#ea580c' : n >= 1 ? '#7c3aed' : '#9ca3af';
 
   return (
     <View style={{ flex: 1, backgroundColor: '#7c3aed' }}>
-      {/* Fixed header */}
-      <View style={{ paddingTop: insets.top + 16, paddingHorizontal: 20, paddingBottom: 12 }}>
-        <Text style={{ color: '#fff', fontSize: 28, fontWeight: '800' }}>Progress</Text>
-        <Text style={{ color: '#c4b5fd', fontSize: 14, marginTop: 2 }}>
-          Your training at a glance
-        </Text>
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+        <Text style={styles.headerTitle}>Progress</Text>
+        <Text style={styles.headerSub}>Your training at a glance</Text>
       </View>
 
       <ScrollView
@@ -133,40 +131,28 @@ export default function ProgressTab() {
           />
         }
       >
-        {/* ── Loading skeletons ── */}
+        {/* ── Loading ── */}
         {loading && (
-          <View style={{ gap: 16, marginTop: 8 }}>
-            <SkeletonBox w="100%" h={96} rounded={20} />
+          <View style={{ gap: 14, marginTop: 8 }}>
+            <Skeleton style={{ height: 104, borderRadius: 20 }} />
             <View style={{ flexDirection: 'row', gap: 10 }}>
-              <SkeletonBox w="31%" h={80} rounded={16} />
-              <SkeletonBox w="31%" h={80} rounded={16} />
-              <SkeletonBox w="31%" h={80} rounded={16} />
+              <Skeleton style={{ flex: 1, height: 84, borderRadius: 16 }} />
+              <Skeleton style={{ flex: 1, height: 84, borderRadius: 16 }} />
+              <Skeleton style={{ flex: 1, height: 84, borderRadius: 16 }} />
             </View>
-            <SkeletonBox w="100%" h={160} rounded={20} />
-            <SkeletonBox w="100%" h={200} rounded={20} />
+            <Skeleton style={{ height: 164, borderRadius: 20 }} />
+            <Skeleton style={{ height: 220, borderRadius: 20 }} />
           </View>
         )}
 
-        {/* ── Error state ── */}
+        {/* ── Error ── */}
         {!loading && error && (
-          <View style={{ alignItems: 'center', marginTop: 60 }}>
-            <Text style={{ color: '#fde8e8', fontSize: 32, marginBottom: 12 }}>😕</Text>
-            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 6 }}>
-              Couldn't load stats
-            </Text>
-            <Text style={{ color: '#c4b5fd', fontSize: 14, marginBottom: 20 }}>
-              Pull down to retry
-            </Text>
-            <Pressable
-              onPress={() => loadStats()}
-              style={{
-                backgroundColor: '#fff',
-                paddingHorizontal: 24,
-                paddingVertical: 12,
-                borderRadius: 20,
-              }}
-            >
-              <Text style={{ color: '#7c3aed', fontWeight: '700' }}>Try Again</Text>
+          <View style={styles.errorState}>
+            <Ionicons name="cloud-offline-outline" size={52} color="rgba(255,255,255,0.5)" />
+            <Text style={styles.errorTitle}>Could not load stats</Text>
+            <Text style={styles.errorSub}>Pull down to retry</Text>
+            <Pressable onPress={() => loadStats()} style={styles.retryBtn}>
+              <Text style={styles.retryBtnTxt}>Try Again</Text>
             </Pressable>
           </View>
         )}
@@ -175,83 +161,59 @@ export default function ProgressTab() {
         {!loading && !error && stats && (
           <>
             {/* Streak Banner */}
-            <View
-              style={{
-                backgroundColor: stats.streak > 0 ? '#4c1d95' : '#6d28d9',
-                borderRadius: 20,
-                padding: 20,
-                marginBottom: 14,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <View>
-                <Text style={{ color: '#ddd6fe', fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1 }}>
-                  Current Streak
-                </Text>
-                <Text style={{ color: '#fff', fontSize: 36, fontWeight: '800', marginTop: 2 }}>
+            <View style={[styles.card, styles.streakCard]}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.streakLabel}>Current Streak</Text>
+                <Text style={styles.streakValue}>
                   {stats.streak} {stats.streak === 1 ? 'day' : 'days'}
                 </Text>
-                <Text style={{ color: '#c4b5fd', fontSize: 13, marginTop: 2 }}>
+                <Text style={styles.streakSub}>
                   {stats.streak === 0
-                    ? 'Complete a session to start your streak!'
+                    ? 'Complete a session to start your streak'
                     : stats.streak >= 7
-                    ? 'Unstoppable! Keep going 💪'
-                    : 'Keep it up! Train again tomorrow'}
+                    ? 'Incredible — you are on fire!'
+                    : 'Keep going, train again tomorrow'}
                 </Text>
               </View>
-              <Text style={{ fontSize: 48 }}>{streakEmoji(stats.streak)}</Text>
+              <View style={[styles.streakIcon, { backgroundColor: `${streakColor(stats.streak)}22` }]}>
+                <Ionicons
+                  name={stats.streak > 0 ? 'flame' : 'moon-outline'}
+                  size={34}
+                  color={streakColor(stats.streak)}
+                />
+              </View>
             </View>
 
-            {/* Stats Cards */}
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+            {/* Stat Cards */}
+            <View style={styles.statsRow}>
               {[
-                { label: 'Total', value: stats.total_sessions, unit: 'sessions', icon: '🏋️' },
-                { label: 'This week', value: stats.sessions_this_week, unit: 'sessions', icon: '📅' },
-                { label: 'PRs set', value: stats.total_prs, unit: 'exercises', icon: '🏆' },
-              ].map(card => (
-                <View
-                  key={card.label}
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#fff',
-                    borderRadius: 16,
-                    padding: 14,
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={{ fontSize: 22 }}>{card.icon}</Text>
-                  <Text style={{ color: '#5b21b6', fontSize: 22, fontWeight: '800', marginTop: 4 }}>
-                    {card.value}
-                  </Text>
-                  <Text style={{ color: '#9ca3af', fontSize: 10, textAlign: 'center', marginTop: 2 }}>
-                    {card.label}
-                  </Text>
+                { label: 'Total', value: stats.total_sessions, sub: 'sessions', icon: 'barbell-outline', color: '#7c3aed' },
+                { label: 'This week', value: stats.sessions_this_week, sub: 'sessions', icon: 'calendar-outline', color: '#0284c7' },
+                { label: 'PRs set', value: stats.total_prs, sub: 'exercises', icon: 'trophy-outline', color: '#d97706' },
+              ].map(c => (
+                <View key={c.label} style={[styles.card, styles.statCard]}>
+                  <Ionicons name={c.icon as any} size={20} color={c.color} />
+                  <Text style={[styles.statValue, { color: c.color }]}>{c.value}</Text>
+                  <Text style={styles.statLabel}>{c.label}</Text>
                 </View>
               ))}
             </View>
 
-            {/* Weekly Activity Chart */}
-            <View
-              style={{
-                backgroundColor: '#fff',
-                borderRadius: 20,
-                padding: 18,
-                marginBottom: 14,
-              }}
-            >
-              <Text style={{ color: '#1f1f2e', fontSize: 15, fontWeight: '700', marginBottom: 4 }}>
-                Weekly Activity
-              </Text>
-              <Text style={{ color: '#9ca3af', fontSize: 12, marginBottom: 8 }}>
-                Sessions completed per week
-              </Text>
+            {/* Weekly Activity */}
+            <View style={[styles.card, styles.sectionCard]}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="stats-chart-outline" size={18} color="#5b21b6" style={{ marginRight: 8 }} />
+                <View>
+                  <Text style={styles.sectionTitle}>Weekly Activity</Text>
+                  <Text style={styles.sectionSub}>Sessions per week, last 8 weeks</Text>
+                </View>
+              </View>
+
               {stats.weekly_counts.every(w => w.count === 0) ? (
-                <View style={{ alignItems: 'center', paddingVertical: 24 }}>
-                  <Text style={{ color: '#d1d5db', fontSize: 32 }}>📊</Text>
-                  <Text style={{ color: '#9ca3af', fontSize: 13, marginTop: 8 }}>
-                    Complete sessions to see your chart
+                <View style={styles.emptyInCard}>
+                  <Ionicons name="bar-chart-outline" size={36} color="#d1d5db" />
+                  <Text style={styles.emptyInCardTxt}>
+                    Complete sessions to see your activity chart
                   </Text>
                 </View>
               ) : (
@@ -260,69 +222,33 @@ export default function ProgressTab() {
             </View>
 
             {/* Personal Records */}
-            <View
-              style={{
-                backgroundColor: '#fff',
-                borderRadius: 20,
-                padding: 18,
-                marginBottom: 14,
-              }}
-            >
-              <Text style={{ color: '#1f1f2e', fontSize: 15, fontWeight: '700', marginBottom: 4 }}>
-                Personal Records 🏆
-              </Text>
-              <Text style={{ color: '#9ca3af', fontSize: 12, marginBottom: 12 }}>
-                Max weight lifted per exercise
-              </Text>
+            <View style={[styles.card, styles.sectionCard]}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="trophy" size={18} color="#d97706" style={{ marginRight: 8 }} />
+                <View>
+                  <Text style={styles.sectionTitle}>Personal Records</Text>
+                  <Text style={styles.sectionSub}>Maximum weight lifted per exercise</Text>
+                </View>
+              </View>
 
               {stats.personal_records.length === 0 ? (
-                <View style={{ alignItems: 'center', paddingVertical: 24 }}>
-                  <Text style={{ color: '#d1d5db', fontSize: 32 }}>🥇</Text>
-                  <Text style={{ color: '#9ca3af', fontSize: 13, marginTop: 8 }}>
-                    Submit session feedback to track your PRs
+                <View style={styles.emptyInCard}>
+                  <Ionicons name="ribbon-outline" size={36} color="#d1d5db" />
+                  <Text style={styles.emptyInCardTxt}>
+                    Submit session feedback with weights to track your PRs
                   </Text>
                 </View>
               ) : (
                 stats.personal_records.map((pr, i) => (
                   <View
                     key={pr.name}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      paddingVertical: 10,
-                      borderTopWidth: i === 0 ? 0 : 1,
-                      borderTopColor: '#f3f4f6',
-                    }}
+                    style={[styles.prRow, i > 0 && styles.prRowBorder]}
                   >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                      <View
-                        style={{
-                          width: 28,
-                          height: 28,
-                          borderRadius: 14,
-                          backgroundColor: i === 0 ? '#fef3c7' : i === 1 ? '#f3f4f6' : '#fef9c3',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          marginRight: 10,
-                        }}
-                      >
-                        <Text style={{ fontSize: 13 }}>
-                          {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`}
-                        </Text>
-                      </View>
-                      <Text
-                        style={{ color: '#374151', fontSize: 14, fontWeight: '600', flex: 1 }}
-                        numberOfLines={1}
-                      >
-                        {pr.name}
-                      </Text>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={{ color: '#5b21b6', fontSize: 16, fontWeight: '800' }}>
-                        {pr.weight_kg === 0 ? 'BW' : `${pr.weight_kg} kg`}
-                      </Text>
-                    </View>
+                    <RankBadge rank={i} />
+                    <Text style={styles.prName} numberOfLines={1}>{pr.name}</Text>
+                    <Text style={styles.prWeight}>
+                      {pr.weight_kg === 0 ? 'Bodyweight' : `${pr.weight_kg} kg`}
+                    </Text>
                   </View>
                 ))
               )}
@@ -333,3 +259,220 @@ export default function ProgressTab() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  header: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+  },
+  headerTitle: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '800',
+  },
+  headerSub: {
+    color: '#c4b5fd',
+    fontSize: 14,
+    marginTop: 2,
+  },
+  skeleton: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  // Cards
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    marginBottom: 14,
+    shadowColor: '#4c1d95',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  streakCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#4c1d95',
+  },
+  streakLabel: {
+    color: '#ddd6fe',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  streakValue: {
+    color: '#fff',
+    fontSize: 34,
+    fontWeight: '800',
+    lineHeight: 38,
+  },
+  streakSub: {
+    color: '#c4b5fd',
+    fontSize: 13,
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  streakIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 12,
+  },
+  // Stat cards
+  statsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14,
+  },
+  statCard: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    gap: 4,
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: '800',
+    marginTop: 6,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: '#9ca3af',
+    textAlign: 'center',
+  },
+  // Section cards
+  sectionCard: {
+    padding: 18,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1f2937',
+  },
+  sectionSub: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 1,
+  },
+  // Chart
+  chartRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 4,
+    paddingTop: 4,
+  },
+  chartCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  barLabel: {
+    fontSize: 10,
+    color: '#7c3aed',
+    fontWeight: '700',
+    marginBottom: 3,
+  },
+  barLabelActive: {
+    color: '#5b21b6',
+  },
+  bar: {
+    width: '68%',
+    borderRadius: 5,
+  },
+  barActive: {
+    backgroundColor: '#7c3aed',
+  },
+  barFilled: {
+    backgroundColor: '#c4b5fd',
+  },
+  barEmpty: {
+    backgroundColor: '#f3f4f6',
+    height: 4,
+  },
+  chartXLabel: {
+    fontSize: 9,
+    color: '#9ca3af',
+    marginTop: 4,
+  },
+  chartXLabelActive: {
+    color: '#7c3aed',
+    fontWeight: '700',
+  },
+  // PRs
+  rankBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  prRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  prRowBorder: {
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+  },
+  prName: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  prWeight: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#5b21b6',
+  },
+  // Empty states
+  emptyInCard: {
+    alignItems: 'center',
+    paddingVertical: 28,
+    gap: 10,
+  },
+  emptyInCardTxt: {
+    fontSize: 13,
+    color: '#9ca3af',
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  errorState: {
+    alignItems: 'center',
+    marginTop: 60,
+    gap: 8,
+  },
+  errorTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  errorSub: {
+    color: '#c4b5fd',
+    fontSize: 14,
+  },
+  retryBtn: {
+    marginTop: 12,
+    backgroundColor: '#fff',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 20,
+  },
+  retryBtnTxt: {
+    color: '#7c3aed',
+    fontWeight: '700',
+  },
+});

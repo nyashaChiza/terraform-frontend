@@ -6,7 +6,9 @@ import {
   FlatList,
   RefreshControl,
   ActivityIndicator,
+  StyleSheet,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { getGoals } from '../../services/goals';
@@ -20,12 +22,13 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   Abandoned: { bg: '#fee2e2', text: '#dc2626' },
 };
 
-const GOAL_ICONS: Record<string, string> = {
-  WeightLoss: '⚖️',
-  MuscleGain: '💪',
-  Strength:   '🏋️',
-  Endurance:  '🏃',
-  Custom:     '🎯',
+// Map goal types to Ionicons names + accent colors
+const GOAL_META: Record<string, { icon: string; color: string; bg: string }> = {
+  WeightLoss: { icon: 'scale-outline',   color: '#0284c7', bg: '#e0f2fe' },
+  MuscleGain: { icon: 'body-outline',    color: '#7c3aed', bg: '#ede9fe' },
+  Strength:   { icon: 'barbell-outline', color: '#d97706', bg: '#fef3c7' },
+  Endurance:  { icon: 'walk-outline',    color: '#16a34a', bg: '#dcfce7' },
+  Custom:     { icon: 'flag-outline',    color: '#6b7280', bg: '#f3f4f6' },
 };
 
 export default function GoalsTab() {
@@ -42,11 +45,8 @@ export default function GoalsTab() {
     if (isRefresh) setRefreshing(true);
     try {
       const res = await getGoals();
-      if (res.ok && Array.isArray(res.body)) {
-        setGoals(res.body);
-      } else {
-        setGoals([]);
-      }
+      if (res.ok && Array.isArray(res.body)) setGoals(res.body);
+      else setGoals([]);
     } catch {
       showError('Error', 'Could not load goals');
     } finally {
@@ -58,10 +58,10 @@ export default function GoalsTab() {
   useEffect(() => { loadGoals(); }, [loadGoals]);
 
   return (
-    <View className="flex-1 bg-violet-700">
+    <View style={{ flex: 1, backgroundColor: '#7c3aed' }}>
       <FlatList
         data={goals}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={item => item.id.toString()}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 140 }}
         refreshControl={
@@ -73,32 +73,34 @@ export default function GoalsTab() {
           />
         }
         ListHeaderComponent={
-          <View className="px-5 pb-4" style={{ paddingTop: insets.top + 16 }}>
-            <Text className="text-white text-3xl font-extrabold">Goals</Text>
-            <Text className="text-violet-200 mb-6">Track your fitness objectives</Text>
+          <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+            <Text style={styles.headerTitle}>Goals</Text>
+            <Text style={styles.headerSub}>Track your fitness objectives</Text>
+
             {hasActiveGoal ? (
-              <View className="bg-white/10 border border-white/20 rounded-2xl py-3.5 px-4 flex-row items-center gap-2">
-                <Text className="text-violet-200 text-sm flex-1">
-                  You have an active goal. Complete or close it before creating a new one.
+              <View style={styles.activeBanner}>
+                <Ionicons name="information-circle-outline" size={16} color="#c4b5fd" style={{ marginRight: 8 }} />
+                <Text style={styles.activeBannerTxt}>
+                  Complete or close your active goal before creating a new one.
                 </Text>
               </View>
             ) : (
-              <Pressable
-                onPress={() => setSheetVisible(true)}
-                className="bg-white/20 border border-white/30 rounded-2xl py-3.5 items-center"
-              >
-                <Text className="text-white font-semibold text-base">+ New Goal</Text>
+              <Pressable onPress={() => setSheetVisible(true)} style={styles.newGoalBtn}>
+                <Ionicons name="add" size={20} color="#fff" />
+                <Text style={styles.newGoalBtnTxt}>New Goal</Text>
               </Pressable>
             )}
           </View>
         }
         ListEmptyComponent={
           !loading ? (
-            <View className="items-center mt-16 px-8">
-              <Text className="text-5xl mb-4">🎯</Text>
-              <Text className="text-white text-xl font-bold text-center">No goals yet</Text>
-              <Text className="text-violet-200 text-center mt-2 leading-5">
-                Set a goal to start generating personalised workouts
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIcon}>
+                <Ionicons name="flag-outline" size={32} color="#a78bfa" />
+              </View>
+              <Text style={styles.emptyTitle}>No goals yet</Text>
+              <Text style={styles.emptySub}>
+                Set a goal to unlock AI-personalised workout sessions
               </Text>
             </View>
           ) : (
@@ -106,14 +108,9 @@ export default function GoalsTab() {
           )
         }
         renderItem={({ item }) => {
-          const icon = GOAL_ICONS[item.type] ?? '🎯';
-          const s = STATUS_COLORS[item.status] ?? { bg: '#f3f4f6', text: '#6b7280' };
-          const starting = item.starting_value ?? 0;
-          const denominator = item.target_value - starting;
-          const progress =
-            item.target_value != null && item.current_value != null && denominator !== 0
-              ? Math.min(Math.max(Math.round(((item.current_value - starting) / denominator) * 100), 0), 100)
-              : null;
+          const meta     = GOAL_META[item.type] ?? GOAL_META.Custom;
+          const s        = STATUS_COLORS[item.status] ?? { bg: '#f3f4f6', text: '#6b7280' };
+          const progress = Math.round(item.progress_pct ?? 0);
 
           return (
             <Pressable
@@ -123,60 +120,61 @@ export default function GoalsTab() {
                   params: { goal: JSON.stringify(item) },
                 })
               }
-              className="bg-white/95 rounded-2xl p-4 mb-3 mx-5"
+              style={styles.goalCard}
             >
-              <View className="flex-row items-start justify-between">
-                <View className="flex-row items-center flex-1 gap-3">
-                  <Text className="text-2xl">{icon}</Text>
-                  <View className="flex-1">
-                    <Text className="font-bold text-violet-800 text-base">{item.type}</Text>
-                    {item.description ? (
-                      <Text className="text-gray-500 text-sm mt-0.5" numberOfLines={2}>
-                        {item.description}
-                      </Text>
-                    ) : null}
-                  </View>
-                </View>
-                <View
-                  className="ml-2 px-2.5 py-1 rounded-full"
-                  style={{ backgroundColor: s.bg }}
-                >
-                  <Text className="text-xs font-bold" style={{ color: s.text }}>
-                    {item.status}
-                  </Text>
-                </View>
+              {/* Left icon */}
+              <View style={[styles.goalIcon, { backgroundColor: meta.bg }]}>
+                <Ionicons name={meta.icon as any} size={20} color={meta.color} />
               </View>
 
-              {progress !== null && (
-                <View className="mt-3">
-                  <View className="flex-row justify-between mb-1">
-                    <Text className="text-xs text-gray-400">Progress</Text>
-                    <Text className="text-xs text-gray-500">
-                      {item.current_value} / {item.target_value}
-                      {progress !== null ? ` · ${progress}%` : ''}
+              {/* Content */}
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <View style={styles.goalCardHeader}>
+                  <Text style={styles.goalType}>{item.type}</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: s.bg }]}>
+                    <Text style={[styles.statusTxt, { color: s.text }]}>{item.status}</Text>
+                  </View>
+                </View>
+
+                {item.description ? (
+                  <Text style={styles.goalDesc} numberOfLines={1}>{item.description}</Text>
+                ) : null}
+
+                {/* Progress bar */}
+                <View style={{ marginTop: 8 }}>
+                  <View style={styles.progressTrack}>
+                    <View style={[styles.progressFill, { width: `${progress}%` as any }]} />
+                  </View>
+                  <View style={styles.progressMeta}>
+                    <Text style={styles.progressMetaTxt}>Goal progress</Text>
+                    <Text style={[styles.progressMetaTxt, { color: '#7c3aed', fontWeight: '700' }]}>
+                      {progress}%
                     </Text>
                   </View>
-                  <View className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <View
-                      className="h-1.5 bg-violet-600 rounded-full"
-                      style={{ width: `${progress}%` }}
-                    />
-                  </View>
                 </View>
-              )}
 
-              <View className="flex-row items-center justify-between mt-2">
-                {item.due_date ? (
-                  <Text className="text-xs text-gray-400">
-                    Due {new Date(item.due_date).toLocaleDateString('en-GB', {
-                      day: 'numeric', month: 'short', year: 'numeric',
-                    })}
-                  </Text>
-                ) : <View />}
-                {item.type !== 'Custom' && (
-                  <Text className="text-xs text-violet-400">auto-tracked</Text>
-                )}
+                {/* Footer */}
+                <View style={styles.goalFooter}>
+                  {item.due_date ? (
+                    <View style={styles.dueDateRow}>
+                      <Ionicons name="calendar-outline" size={11} color="#9ca3af" />
+                      <Text style={styles.dueDateTxt}>
+                        {new Date(item.due_date).toLocaleDateString('en-GB', {
+                          day: 'numeric', month: 'short', year: 'numeric',
+                        })}
+                      </Text>
+                    </View>
+                  ) : <View />}
+                  {item.type !== 'Custom' && (
+                    <View style={styles.autoTrackBadge}>
+                      <Ionicons name="sync-outline" size={10} color="#7c3aed" />
+                      <Text style={styles.autoTrackTxt}>auto-tracked</Text>
+                    </View>
+                  )}
+                </View>
               </View>
+
+              <Ionicons name="chevron-forward" size={16} color="#d1d5db" style={{ marginLeft: 8 }} />
             </Pressable>
           );
         }}
@@ -190,3 +188,179 @@ export default function GoalsTab() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  header: {
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+  },
+  headerTitle: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '800',
+  },
+  headerSub: {
+    color: '#c4b5fd',
+    fontSize: 14,
+    marginTop: 2,
+    marginBottom: 16,
+  },
+  activeBanner: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  activeBannerTxt: {
+    color: '#ddd6fe',
+    fontSize: 13,
+    flex: 1,
+    lineHeight: 18,
+  },
+  newGoalBtn: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 14,
+    paddingVertical: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  newGoalBtnTxt: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  // Empty state
+  emptyState: {
+    alignItems: 'center',
+    marginTop: 56,
+    paddingHorizontal: 40,
+    gap: 10,
+  },
+  emptyIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  emptyTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  emptySub: {
+    color: '#c4b5fd',
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  // Goal cards
+  goalCard: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    marginHorizontal: 20,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#4c1d95',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  goalIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  goalCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  goalType: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1f2937',
+    flex: 1,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginLeft: 8,
+  },
+  statusTxt: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  goalDesc: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  progressTrack: {
+    height: 5,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#7c3aed',
+    borderRadius: 3,
+  },
+  progressMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  progressMetaTxt: {
+    fontSize: 11,
+    color: '#9ca3af',
+  },
+  goalFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  dueDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  dueDateTxt: {
+    fontSize: 11,
+    color: '#9ca3af',
+  },
+  autoTrackBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#f5f3ff',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  autoTrackTxt: {
+    fontSize: 10,
+    color: '#7c3aed',
+    fontWeight: '600',
+  },
+});
