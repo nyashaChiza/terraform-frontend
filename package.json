@@ -24,6 +24,7 @@
     "expo-store-review": "~9.0.9",
     "nativewind": "latest",
     "react": "19.1.0",
+    "react-dom": "19.1.0",
     "react-native": "0.81.5",
     "react-native-alert-notification": "latest",
     "react-native-get-random-values": "~1.11.0",
