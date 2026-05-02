@@ -26,12 +26,23 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nyashachiza.terraform",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
+      },
+      "package": "com.nyashachiza.terraform"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2ef4d5b4-2a65-46a8-882e-09336eab6a94"
       }
     }
   }
