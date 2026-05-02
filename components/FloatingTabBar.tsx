@@ -19,7 +19,7 @@ type Props = {
   navigation: any;
 };
 
-const HIDE_ON = ['session-details', 'goal-detail'];
+const HIDE_ON = ['session-details', 'goal-detail', 'exercise-detail'];
 
 export default function FloatingTabBar({ state, navigation }: Props) {
   const insets = useSafeAreaInsets();
