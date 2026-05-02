@@ -93,12 +93,12 @@ export default function WorkoutsTab() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#7c3aed' }}>
-      {/* Header */}
+
+      {/* ── Purple header ── */}
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <Text style={styles.headerTitle}>Exercise Library</Text>
         <Text style={styles.headerSub}>{exercises.length} exercises available</Text>
 
-        {/* Search bar */}
         <View style={styles.searchBar}>
           <Ionicons name="search-outline" size={18} color="#c4b5fd" />
           <TextInput
@@ -116,139 +116,136 @@ export default function WorkoutsTab() {
         </View>
       </View>
 
-      {/* Muscle filter chips */}
-      {muscleGroups.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chips}
+      {/* ── Compact filter chips (fixed height row) ── */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.chipsScroll}
+        contentContainerStyle={styles.chipsContent}
+      >
+        <Pressable
+          onPress={() => setSelectedMuscle(null)}
+          style={[styles.chip, !selectedMuscle && styles.chipActive]}
         >
-          <Pressable
-            onPress={() => setSelectedMuscle(null)}
-            style={[styles.chip, !selectedMuscle && styles.chipActive]}
+          <Text style={[styles.chipTxt, !selectedMuscle && styles.chipTxtActive]}>All</Text>
+        </Pressable>
+        {muscleGroups.map(mg => {
+          const active = selectedMuscle === mg;
+          const ms = getMuscleStyle(mg);
+          return (
+            <Pressable
+              key={mg}
+              onPress={() => setSelectedMuscle(active ? null : mg)}
+              style={[styles.chip, active && styles.chipActive]}
+            >
+              <Ionicons
+                name={ms.icon as any}
+                size={12}
+                color={active ? '#7c3aed' : 'rgba(255,255,255,0.75)'}
+              />
+              <Text style={[styles.chipTxt, active && styles.chipTxtActive]}>{mg}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      {/* ── White card surface ── */}
+      <View style={styles.surface}>
+        {loading ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="large" color="#7c3aed" />
+            <Text style={styles.loadingTxt}>Loading exercises…</Text>
+          </View>
+        ) : (
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => loadExercises(true)}
+                tintColor="#7c3aed"
+                colors={['#7c3aed']}
+              />
+            }
           >
-            <Text style={[styles.chipTxt, !selectedMuscle && styles.chipTxtActive]}>All</Text>
-          </Pressable>
-          {muscleGroups.map(mg => {
-            const active = selectedMuscle === mg;
-            const ms = getMuscleStyle(mg);
-            return (
-              <Pressable
-                key={mg}
-                onPress={() => setSelectedMuscle(active ? null : mg)}
-                style={[styles.chip, active && styles.chipActive]}
-              >
-                <Ionicons
-                  name={ms.icon as any}
-                  size={12}
-                  color={active ? '#7c3aed' : 'rgba(255,255,255,0.7)'}
-                />
-                <Text style={[styles.chipTxt, active && styles.chipTxtActive]}>
-                  {mg}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      )}
-
-      {/* List */}
-      {loading ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator size="large" color="#fff" />
-          <Text style={{ color: '#c4b5fd', marginTop: 12 }}>Loading exercises...</Text>
-        </View>
-      ) : (
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 140 }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => loadExercises(true)}
-              tintColor="#fff"
-              colors={['#7c3aed']}
-            />
-          }
-        >
-          {grouped.length === 0 ? (
-            <View style={styles.emptyState}>
-              <View style={styles.emptyIcon}>
-                <Ionicons name="barbell-outline" size={32} color="#a78bfa" />
-              </View>
-              <Text style={styles.emptyTitle}>No exercises found</Text>
-              <Text style={styles.emptySub}>Try a different search term or filter</Text>
-            </View>
-          ) : (
-            grouped.map(([muscle, exs]) => {
-              const ms = getMuscleStyle(muscle);
-              return (
-                <View key={muscle} style={{ marginBottom: 18 }}>
-                  {/* Group label */}
-                  <View style={styles.groupLabel}>
-                    <Ionicons name={ms.icon as any} size={14} color="rgba(255,255,255,0.7)" />
-                    <Text style={styles.groupLabelTxt}>{muscle}</Text>
-                    <View style={styles.groupCount}>
-                      <Text style={styles.groupCountTxt}>{exs.length}</Text>
-                    </View>
-                  </View>
-
-                  {exs.map((ex) => {
-                    const stressStyle = STRESS_COLORS[ex.stress_level ?? ''] ?? { bg: '#f3f4f6', text: '#6b7280' };
-                    return (
-                      <Pressable
-                        key={ex.id}
-                        style={styles.exCard}
-                        onPress={() => router.push({
-                          pathname: '/(tabs)/exercise-detail',
-                          params: { exercise: JSON.stringify(ex) },
-                        })}
-                      >
-                        {/* Muscle color strip */}
-                        <View style={[styles.exStrip, { backgroundColor: ms.bg }]}>
-                          <Ionicons name={ms.icon as any} size={16} color={ms.text} />
-                        </View>
-
-                        <View style={styles.exContent}>
-                          <Text style={styles.exName} numberOfLines={1}>{ex.name}</Text>
-                          {ex.secondary_muscles?.length > 0 && (
-                            <Text style={styles.exEquipment} numberOfLines={1}>
-                              Also: {ex.secondary_muscles.join(', ')}
-                            </Text>
-                          )}
-                        </View>
-
-                        <View style={{ alignItems: 'flex-end', gap: 6, marginRight: 12 }}>
-                          {ex.stress_level && (
-                            <View style={[styles.diffBadge, { backgroundColor: stressStyle.bg }]}>
-                              <Text style={[styles.diffTxt, { color: stressStyle.text }]}>
-                                {ex.stress_level}
-                              </Text>
-                            </View>
-                          )}
-                          <Ionicons name="chevron-forward" size={14} color="#d1d5db" />
-                        </View>
-                      </Pressable>
-                    );
-                  })}
+            {grouped.length === 0 ? (
+              <View style={styles.emptyState}>
+                <View style={styles.emptyIcon}>
+                  <Ionicons name="barbell-outline" size={32} color="#a78bfa" />
                 </View>
-              );
-            })
-          )}
-        </ScrollView>
-      )}
+                <Text style={styles.emptyTitle}>No exercises found</Text>
+                <Text style={styles.emptySub}>Try a different search or filter</Text>
+              </View>
+            ) : (
+              grouped.map(([muscle, exs]) => {
+                const ms = getMuscleStyle(muscle);
+                return (
+                  <View key={muscle} style={styles.group}>
+                    {/* Group header */}
+                    <View style={styles.groupHeader}>
+                      <View style={[styles.groupIconWrap, { backgroundColor: ms.bg }]}>
+                        <Ionicons name={ms.icon as any} size={13} color={ms.text} />
+                      </View>
+                      <Text style={[styles.groupTitle, { color: ms.text }]}>{muscle}</Text>
+                      <View style={[styles.groupBadge, { backgroundColor: ms.bg }]}>
+                        <Text style={[styles.groupBadgeTxt, { color: ms.text }]}>{exs.length}</Text>
+                      </View>
+                    </View>
+
+                    {/* Exercise cards */}
+                    {exs.map((ex, idx) => {
+                      const stressStyle = STRESS_COLORS[ex.stress_level ?? ''] ?? { bg: '#f3f4f6', text: '#6b7280' };
+                      const isLast = idx === exs.length - 1;
+                      return (
+                        <Pressable
+                          key={ex.id}
+                          style={[styles.exRow, !isLast && styles.exRowBorder]}
+                          onPress={() => router.push({
+                            pathname: '/(tabs)/exercise-detail',
+                            params: { exercise: JSON.stringify(ex) },
+                          })}
+                        >
+                          <View style={styles.exRowLeft}>
+                            <Text style={styles.exName} numberOfLines={1}>{ex.name}</Text>
+                            {ex.secondary_muscles?.length > 0 && (
+                              <Text style={styles.exSub} numberOfLines={1}>
+                                Also works: {ex.secondary_muscles.join(', ')}
+                              </Text>
+                            )}
+                          </View>
+                          <View style={styles.exRowRight}>
+                            {ex.stress_level && (
+                              <View style={[styles.stressBadge, { backgroundColor: stressStyle.bg }]}>
+                                <Text style={[styles.stressTxt, { color: stressStyle.text }]}>
+                                  {ex.stress_level}
+                                </Text>
+                              </View>
+                            )}
+                            <Ionicons name="chevron-forward" size={16} color="#d1d5db" />
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                );
+              })
+            )}
+          </ScrollView>
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // ── Header ──
   header: {
     paddingHorizontal: 20,
-    paddingBottom: 12,
+    paddingBottom: 14,
   },
   headerTitle: { color: '#fff', fontSize: 28, fontWeight: '800' },
-  headerSub: { color: '#c4b5fd', fontSize: 14, marginTop: 2, marginBottom: 14 },
+  headerSub:   { color: '#c4b5fd', fontSize: 13, marginTop: 2, marginBottom: 14 },
   searchBar: {
     backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: 14,
@@ -260,90 +257,125 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     color: '#fff',
-    paddingVertical: 12,
+    paddingVertical: 11,
     fontSize: 15,
   },
-  // Chips
-  chips: {
+
+  // ── Chips — fixed-height horizontal row ──
+  chipsScroll: {
+    flexGrow: 0,           // ← the key fix: don't let it expand vertically
+    marginBottom: 14,
+  },
+  chipsContent: {
     paddingHorizontal: 20,
-    paddingBottom: 12,
+    paddingVertical: 2,
     gap: 8,
+    alignItems: 'center', // keep chips vertically centred within the row
   },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
     paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingVertical: 8,
     borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.18)',
   },
-  chipActive: { backgroundColor: '#fff' },
-  chipTxt: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.85)',
-    textTransform: 'capitalize',
-  },
+  chipActive:    { backgroundColor: '#fff' },
+  chipTxt:       { fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.88)', textTransform: 'capitalize' },
   chipTxtActive: { color: '#7c3aed' },
-  // Group
-  groupLabel: {
+
+  // ── White surface ──
+  surface: {
+    flex: 1,
+    backgroundColor: '#f5f3ff',
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    overflow: 'hidden',
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 140,
+  },
+  loadingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingTop: 60,
+  },
+  loadingTxt: { color: '#7c3aed', fontSize: 14, fontWeight: '600' },
+
+  // ── Muscle group ──
+  group: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    marginBottom: 14,
+    overflow: 'hidden',
+    shadowColor: '#4c1d95',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  groupHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
   },
-  groupLabelTxt: {
-    color: 'rgba(255,255,255,0.85)',
+  groupIconWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupTitle: {
+    flex: 1,
     fontSize: 13,
     fontWeight: '800',
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    flex: 1,
+    letterSpacing: 0.7,
   },
-  groupCount: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  groupBadge: {
     borderRadius: 10,
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  groupCountTxt: { fontSize: 11, color: '#fff', fontWeight: '700' },
-  // Exercise card
-  exCard: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    marginBottom: 8,
+  groupBadgeTxt: { fontSize: 11, fontWeight: '800' },
+
+  // ── Exercise rows (inside card) ──
+  exRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    overflow: 'hidden',
-    shadowColor: '#4c1d95',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
   },
-  exStrip: {
-    width: 44,
-    alignSelf: 'stretch',
+  exRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#f9fafb',
+  },
+  exRowLeft: { flex: 1, marginRight: 10 },
+  exName:    { fontSize: 14, fontWeight: '700', color: '#1f2937' },
+  exSub:     { fontSize: 12, color: '#9ca3af', marginTop: 2 },
+  exRowRight: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 8,
   },
-  exContent: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-  },
-  exName: { fontSize: 14, fontWeight: '700', color: '#1f2937' },
-  exEquipment: { fontSize: 12, color: '#9ca3af', marginTop: 2 },
-  exDesc: { fontSize: 12, color: '#6b7280', marginTop: 4, lineHeight: 17 },
-  diffBadge: {
-    marginRight: 12,
+  stressBadge: {
     paddingHorizontal: 9,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: 8,
   },
-  diffTxt: { fontSize: 11, fontWeight: '700' },
-  // Empty
+  stressTxt: { fontSize: 11, fontWeight: '700' },
+
+  // ── Empty state ──
   emptyState: {
     alignItems: 'center',
     marginTop: 60,
@@ -353,11 +385,11 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: '#ede9fe',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
   },
-  emptyTitle: { color: '#fff', fontSize: 18, fontWeight: '800' },
-  emptySub: { color: '#c4b5fd', fontSize: 14, textAlign: 'center' },
+  emptyTitle: { color: '#374151', fontSize: 18, fontWeight: '800' },
+  emptySub:   { color: '#9ca3af', fontSize: 14, textAlign: 'center' },
 });
