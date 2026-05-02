@@ -3,8 +3,9 @@
     "name": "terraform",
     "slug": "terraform",
     "version": "1.0.0",
+    "sdkVersion": "54.0.0",
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.jpg"
     },
     "experiments": {
       "tsconfigPaths": true
@@ -18,7 +19,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash.jpg",
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -34,7 +35,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.nyashachiza.terraform"
@@ -44,6 +45,7 @@
       "eas": {
         "projectId": "2ef4d5b4-2a65-46a8-882e-09336eab6a94"
       }
-    }
+    },
+    "scheme": "terraform"
   }
 }
