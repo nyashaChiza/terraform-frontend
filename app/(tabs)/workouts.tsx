@@ -11,19 +11,17 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { getExercises, Exercise } from '../../services/exercises';
 
+// Keyed to the backend MuscleGroup enum values
 const MUSCLE_COLORS: Record<string, { bg: string; text: string; icon: string }> = {
-  chest:       { bg: '#fee2e2', text: '#dc2626', icon: 'body-outline' },
-  back:        { bg: '#dbeafe', text: '#1d4ed8', icon: 'accessibility-outline' },
-  shoulders:   { bg: '#fef3c7', text: '#b45309', icon: 'person-outline' },
-  biceps:      { bg: '#d1fae5', text: '#059669', icon: 'fitness-outline' },
-  triceps:     { bg: '#ede9fe', text: '#7c3aed', icon: 'fitness-outline' },
-  legs:        { bg: '#fce7f3', text: '#db2777', icon: 'walk-outline' },
-  glutes:      { bg: '#fef9c3', text: '#ca8a04', icon: 'body-outline' },
-  core:        { bg: '#e0f2fe', text: '#0284c7', icon: 'ellipse-outline' },
-  cardio:      { bg: '#f0fdf4', text: '#16a34a', icon: 'bicycle-outline' },
-  'full body': { bg: '#f3f4f6', text: '#374151', icon: 'flash-outline' },
+  chest:     { bg: '#fee2e2', text: '#dc2626', icon: 'body-outline' },
+  back:      { bg: '#dbeafe', text: '#1d4ed8', icon: 'accessibility-outline' },
+  arms:      { bg: '#d1fae5', text: '#059669', icon: 'fitness-outline' },
+  shoulders: { bg: '#fef3c7', text: '#b45309', icon: 'person-outline' },
+  legs:      { bg: '#fce7f3', text: '#db2777', icon: 'walk-outline' },
+  core:      { bg: '#e0f2fe', text: '#0284c7', icon: 'ellipse-outline' },
 };
 
 const DEFAULT_STYLE = { bg: '#f3f4f6', text: '#374151', icon: 'barbell-outline' };
@@ -32,15 +30,16 @@ function getMuscleStyle(muscle: string) {
   return MUSCLE_COLORS[muscle.toLowerCase()] ?? DEFAULT_STYLE;
 }
 
-const DIFFICULTY_COLORS: Record<string, { bg: string; text: string }> = {
-  Beginner:     { bg: '#dcfce7', text: '#15803d' },
-  Intermediate: { bg: '#fef3c7', text: '#a16207' },
-  Advanced:     { bg: '#fee2e2', text: '#b91c1c' },
-  Expert:       { bg: '#ede9fe', text: '#6d28d9' },
+// Maps backend StressLevel enum values
+const STRESS_COLORS: Record<string, { bg: string; text: string }> = {
+  Low:    { bg: '#dcfce7', text: '#15803d' },
+  Medium: { bg: '#fef3c7', text: '#a16207' },
+  High:   { bg: '#fee2e2', text: '#b91c1c' },
 };
 
 export default function WorkoutsTab() {
   const insets = useSafeAreaInsets();
+  const router  = useRouter();
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -64,16 +63,20 @@ export default function WorkoutsTab() {
   useEffect(() => { loadExercises(); }, [loadExercises]);
 
   const muscleGroups = useMemo(() =>
-    Array.from(new Set(exercises.map(e => e.muscle_group).filter(Boolean))).sort(),
+    Array.from(new Set(exercises.map(e => e.primary_muscle).filter(Boolean))).sort(),
     [exercises]
   );
 
   const filtered = useMemo(() => {
     let r = exercises;
-    if (selectedMuscle) r = r.filter(e => e.muscle_group?.toLowerCase() === selectedMuscle.toLowerCase());
+    if (selectedMuscle) r = r.filter(e => e.primary_muscle?.toLowerCase() === selectedMuscle.toLowerCase());
     if (search.trim()) {
       const q = search.toLowerCase();
-      r = r.filter(e => e.name?.toLowerCase().includes(q) || e.muscle_group?.toLowerCase().includes(q));
+      r = r.filter(e =>
+        e.name?.toLowerCase().includes(q) ||
+        e.primary_muscle?.toLowerCase().includes(q) ||
+        e.secondary_muscles?.some(m => m.toLowerCase().includes(q))
+      );
     }
     return r;
   }, [exercises, selectedMuscle, search]);
@@ -81,7 +84,7 @@ export default function WorkoutsTab() {
   const grouped = useMemo(() => {
     const map: Record<string, Exercise[]> = {};
     for (const ex of filtered) {
-      const key = ex.muscle_group || 'Other';
+      const key = ex.primary_muscle || 'Other';
       if (!map[key]) map[key] = [];
       map[key].push(ex);
     }
@@ -192,9 +195,16 @@ export default function WorkoutsTab() {
                   </View>
 
                   {exs.map((ex) => {
-                    const diffStyle = DIFFICULTY_COLORS[ex.difficulty ?? ''] ?? { bg: '#f3f4f6', text: '#6b7280' };
+                    const stressStyle = STRESS_COLORS[ex.stress_level ?? ''] ?? { bg: '#f3f4f6', text: '#6b7280' };
                     return (
-                      <View key={ex.id} style={styles.exCard}>
+                      <Pressable
+                        key={ex.id}
+                        style={styles.exCard}
+                        onPress={() => router.push({
+                          pathname: '/(tabs)/exercise-detail',
+                          params: { exercise: JSON.stringify(ex) },
+                        })}
+                      >
                         {/* Muscle color strip */}
                         <View style={[styles.exStrip, { backgroundColor: ms.bg }]}>
                           <Ionicons name={ms.icon as any} size={16} color={ms.text} />
@@ -202,22 +212,24 @@ export default function WorkoutsTab() {
 
                         <View style={styles.exContent}>
                           <Text style={styles.exName} numberOfLines={1}>{ex.name}</Text>
-                          {ex.equipment && (
-                            <Text style={styles.exEquipment}>{ex.equipment}</Text>
-                          )}
-                          {ex.description && (
-                            <Text style={styles.exDesc} numberOfLines={2}>{ex.description}</Text>
+                          {ex.secondary_muscles?.length > 0 && (
+                            <Text style={styles.exEquipment} numberOfLines={1}>
+                              Also: {ex.secondary_muscles.join(', ')}
+                            </Text>
                           )}
                         </View>
 
-                        {ex.difficulty && (
-                          <View style={[styles.diffBadge, { backgroundColor: diffStyle.bg }]}>
-                            <Text style={[styles.diffTxt, { color: diffStyle.text }]}>
-                              {ex.difficulty}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
+                        <View style={{ alignItems: 'flex-end', gap: 6, marginRight: 12 }}>
+                          {ex.stress_level && (
+                            <View style={[styles.diffBadge, { backgroundColor: stressStyle.bg }]}>
+                              <Text style={[styles.diffTxt, { color: stressStyle.text }]}>
+                                {ex.stress_level}
+                              </Text>
+                            </View>
+                          )}
+                          <Ionicons name="chevron-forward" size={14} color="#d1d5db" />
+                        </View>
+                      </Pressable>
                     );
                   })}
                 </View>

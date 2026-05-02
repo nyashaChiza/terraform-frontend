@@ -14,6 +14,7 @@ export default function TabLayout() {
       <Tabs.Screen name="profile" />
       <Tabs.Screen name="session-details" options={{ href: null }} />
       <Tabs.Screen name="goal-detail" options={{ href: null }} />
+      <Tabs.Screen name="exercise-detail" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -3,10 +3,9 @@ import { apiFetch } from './api';
 export type Exercise = {
   id: number;
   name: string;
-  muscle_group: string;
-  description?: string;
-  equipment?: string;
-  difficulty?: string;
+  primary_muscle: string;       // "Chest" | "Back" | "Arms" | "Shoulders" | "Legs" | "Core"
+  secondary_muscles: string[];  // e.g. ["Triceps", "Shoulders"]
+  stress_level: string;         // "Low" | "Medium" | "High"
 };
 
 export async function getExercises() {
