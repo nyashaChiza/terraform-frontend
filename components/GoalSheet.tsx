@@ -36,8 +36,6 @@ const GOAL_TYPES = [
 export default function GoalSheet({ visible, onClose, mode = 'create', goalId, initialValues, onCreated, onUpdated }: Props) {
   const [type, setType] = useState<typeof GOAL_TYPES[number]>('WeightLoss');
   const [description, setDescription] = useState('');
-  const [targetValue, setTargetValue] = useState('');
-  const [startingValue, setStartingValue] = useState('');
   const [startDate, setStartDate] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [loading, setLoading] = useState(false);
@@ -46,8 +44,6 @@ export default function GoalSheet({ visible, onClose, mode = 'create', goalId, i
     if (visible && mode === 'update' && initialValues) {
       if (GOAL_TYPES.includes(initialValues.type)) setType(initialValues.type);
       setDescription(initialValues.description ?? '');
-      setTargetValue(initialValues.target_value != null ? String(initialValues.target_value) : '');
-      setStartingValue(initialValues.starting_value != null ? String(initialValues.starting_value) : '');
       setStartDate(initialValues.start_date ?? '');
       setDueDate(initialValues.due_date ?? '');
     }
@@ -71,8 +67,6 @@ export default function GoalSheet({ visible, onClose, mode = 'create', goalId, i
   const validate = () => {
     if (!startDate) return 'Start date is required';
     if (!dueDate) return 'Due date is required';
-    if (!targetValue) return 'Target value is required';
-    if (Number(targetValue) <= 0) return 'Target value must be greater than 0';
     return null;
   };
 
@@ -88,14 +82,14 @@ export default function GoalSheet({ visible, onClose, mode = 'create', goalId, i
       const basePayload = {
         type,
         description,
-        target_value: Number(targetValue),
+        target_value: 100,
         start_date: startDate,
         due_date: dueDate,
       };
 
       // starting_value is immutable after creation — never send it on update
       const payload = mode === 'create'
-        ? { ...basePayload, starting_value: Number(startingValue) || 0 }
+        ? { ...basePayload, starting_value: 0 }
         : basePayload;
 
       let res;
@@ -219,37 +213,6 @@ export default function GoalSheet({ visible, onClose, mode = 'create', goalId, i
                   onChangeText={setDescription}
                   className="border border-gray-300 rounded-xl px-4 py-3 text-base"
                 />
-              </View>
-
-              {/* Values */}
-              <View className="mt-5 flex-row gap-3">
-                <View className="flex-1">
-                  <Text className="text-gray-700 font-semibold mb-2 text-sm">
-                    Starting Value
-                  </Text>
-                  <TextInput
-                    keyboardType="numeric"
-                    placeholder="0"
-                    placeholderTextColor="#9ca3af"
-                    value={startingValue}
-                    onChangeText={setStartingValue}
-                    className="border border-gray-300 rounded-xl px-4 py-3 text-base"
-                  />
-                </View>
-
-                <View className="flex-1">
-                  <Text className="text-gray-700 font-semibold mb-2 text-sm">
-                    Target Value
-                  </Text>
-                  <TextInput
-                    keyboardType="numeric"
-                    placeholder="10"
-                    placeholderTextColor="#9ca3af"
-                    value={targetValue}
-                    onChangeText={setTargetValue}
-                    className="border border-gray-300 rounded-xl px-4 py-3 text-base"
-                  />
-                </View>
               </View>
 
               {/* Dates */}

@@ -9,7 +9,9 @@ import {
   KeyboardAvoidingView,
   ScrollView,
   Platform,
+  StyleSheet,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { login as loginSvc } from '../../services/auth';
@@ -19,9 +21,10 @@ import { showError, showSuccess } from '../../services/toast';
 export default function Login() {
   const router = useRouter();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [email, setEmail]           = useState('');
+  const [password, setPassword]     = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading]       = useState(false);
 
   const onLogin = async () => {
     if (!email || !password) {
@@ -97,14 +100,19 @@ export default function Login() {
             className="border border-gray-300 rounded-xl px-4 py-3 mb-3 text-base"
           />
 
-          <TextInput
-            placeholder="Password"
-            placeholderTextColor="#9ca3af"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            className="border border-gray-300 rounded-xl px-4 py-3 mb-4 text-base"
-          />
+          <View style={styles.passwordWrap}>
+            <TextInput
+              placeholder="Password"
+              placeholderTextColor="#9ca3af"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              style={styles.passwordInput}
+            />
+            <Pressable onPress={() => setShowPassword(v => !v)} style={styles.eyeBtn} hitSlop={8}>
+              <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#9ca3af" />
+            </Pressable>
+          </View>
 
           <Pressable
             onPress={onLogin}
@@ -134,3 +142,25 @@ export default function Login() {
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  passwordWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+    backgroundColor: '#fff',
+  },
+  passwordInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#111827',
+  },
+  eyeBtn: {
+    paddingLeft: 8,
+  },
+});

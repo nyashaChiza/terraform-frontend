@@ -8,20 +8,34 @@ import {
   KeyboardAvoidingView,
   ScrollView,
   Platform,
+  StyleSheet,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 
 import { register as registerSvc } from '../../services/auth';
-import { authStore } from '../../store/auth';
 import { showError, showSuccess } from '../../services/toast';
+
+function getPasswordErrors(pw: string): string[] {
+  const errors: string[] = [];
+  if (pw.length < 8)                          errors.push('At least 8 characters');
+  if (pw === pw.toLowerCase())                errors.push('At least one uppercase letter');
+  if (!/\d/.test(pw))                         errors.push('At least one number');
+  return errors;
+}
 
 export default function SignUp() {
   const router = useRouter();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [email, setEmail]           = useState('');
+  const [password, setPassword]     = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading]       = useState(false);
+  const [pwTouched, setPwTouched]   = useState(false);
+
+  const pwErrors   = getPasswordErrors(password);
+  const pwValid    = pwErrors.length === 0;
 
   const onSignUp = async () => {
     if (!email || !password) {
@@ -29,37 +43,31 @@ export default function SignUp() {
       return;
     }
 
+    if (!pwValid) {
+      showError('Weak password', pwErrors[0]);
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await registerSvc({ email, password });
 
-      const token =
-        res?.access_token ??
-        res?.token ??
-        res?.accessToken ??
-        null;
-
-      const token_type = res?.token_type ?? 'Bearer';
-      const user = res?.user ?? null;
-
-      if (!token) {
-        showError('Sign up failed', res?.detail ?? 'Unable to create account');
+      // Register returns UserOut (id + email), not a token.
+      // apiFetch wraps the response as { ok, status, body }.
+      if (res.ok && res.body?.id) {
+        showSuccess('Account created! Please sign in.');
+        router.replace('/(auth)/login');
         return;
       }
 
-      authStore.set({ token, token_type, user });
+      // Handle API-level error (e.g. email already taken → 409)
+      const detail = Array.isArray(res.body?.detail)
+        ? res.body.detail[0]?.msg ?? 'Unable to create account'
+        : res.body?.detail ?? 'Unable to create account';
+      showError('Sign up failed', detail);
 
-      showSuccess('Account created successfully');
-
-      // If email verification is required, keep this.
-      // Otherwise: router.replace('/(app)');
-      router.replace('/(auth)/login');
-
-    } catch (err: any) {
-      showError(
-        'Something went wrong',
-        err?.detail ?? 'Please check your connection and try again'
-      );
+    } catch {
+      showError('Something went wrong', 'Please check your connection and try again');
     } finally {
       setLoading(false);
     }
@@ -106,14 +114,37 @@ export default function SignUp() {
             className="border border-gray-300 rounded-xl px-4 py-3 mb-3 text-base"
           />
 
-          <TextInput
-            placeholder="Password"
-            placeholderTextColor="#9ca3af"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            className="border border-gray-300 rounded-xl px-4 py-3 mb-5 text-base"
-          />
+          <View style={[styles.passwordWrap, pwTouched && !pwValid && styles.passwordWrapError]}>
+            <TextInput
+              placeholder="Password"
+              placeholderTextColor="#9ca3af"
+              value={password}
+              onChangeText={setPassword}
+              onBlur={() => setPwTouched(true)}
+              secureTextEntry={!showPassword}
+              style={styles.passwordInput}
+            />
+            <Pressable onPress={() => setShowPassword(v => !v)} style={styles.eyeBtn} hitSlop={8}>
+              <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#9ca3af" />
+            </Pressable>
+          </View>
+
+          {/* Password requirements — shown after the field is touched */}
+          <View style={{ marginTop: 8, marginBottom: 20, gap: 4 }}>
+            {(['At least 8 characters', 'At least one uppercase letter', 'At least one number'] as const).map(rule => {
+              const met = !pwErrors.includes(rule);
+              const show = pwTouched || (password.length > 0);
+              if (!show) return null;
+              return (
+                <Text
+                  key={rule}
+                  style={{ fontSize: 12, color: met ? '#16a34a' : '#9ca3af' }}
+                >
+                  {met ? '✓' : '·'} {rule}
+                </Text>
+              );
+            })}
+          </View>
 
           <Pressable
             onPress={onSignUp}
@@ -137,7 +168,7 @@ export default function SignUp() {
             className="mt-4 items-center"
           >
             <Text className="text-violet-700 font-semibold">
-              Already have an account? Log in
+              Already have an account? Login
             </Text>
           </Pressable>
         </View>
@@ -145,3 +176,27 @@ export default function SignUp() {
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  passwordWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    backgroundColor: '#fff',
+  },
+  passwordWrapError: {
+    borderColor: '#f87171',
+  },
+  passwordInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#111827',
+  },
+  eyeBtn: {
+    paddingLeft: 8,
+  },
+});

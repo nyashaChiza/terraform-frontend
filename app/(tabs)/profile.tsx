@@ -11,13 +11,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { getProfile, updateProfile } from '../../services/profiles';
 import { authStore } from '../../store/auth';
 import ProfileSheet from '../../components/ProfileSheet';
+import ChangePasswordSheet from '../../components/ChangePasswordSheet';
 import { showError } from '../../services/toast';
 
 export default function ProfileTab() {
   const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [editVisible, setEditVisible] = useState(false);
+  const [editVisible, setEditVisible]         = useState(false);
+  const [changePwVisible, setChangePwVisible] = useState(false);
 
   const loadProfile = async () => {
     try {
@@ -72,13 +74,22 @@ export default function ProfileTab() {
             <Text className="text-violet-200 mt-1">{profile.phone_number}</Text>
           ) : null}
 
-          <Pressable
-            onPress={() => setEditVisible(true)}
-            className="mt-4 flex-row items-center gap-2 bg-white/20 border border-white/30 px-5 py-2.5 rounded-full"
-          >
-            <Ionicons name="pencil" size={14} color="#fff" />
-            <Text className="text-white font-semibold text-sm">Edit Profile</Text>
-          </Pressable>
+          <View className="flex-row gap-3 mt-4">
+            <Pressable
+              onPress={() => setEditVisible(true)}
+              className="flex-row items-center gap-2 bg-white/20 border border-white/30 px-5 py-2.5 rounded-full"
+            >
+              <Ionicons name="pencil" size={14} color="#fff" />
+              <Text className="text-white font-semibold text-sm">Edit Profile</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setChangePwVisible(true)}
+              className="flex-row items-center gap-2 bg-white/20 border border-white/30 px-5 py-2.5 rounded-full"
+            >
+              <Ionicons name="lock-closed-outline" size={14} color="#fff" />
+              <Text className="text-white font-semibold text-sm">Change Password</Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* Stats grid */}
@@ -118,6 +129,11 @@ export default function ProfileTab() {
           setProfile(updated);
           setEditVisible(false);
         }}
+      />
+
+      <ChangePasswordSheet
+        visible={changePwVisible}
+        onClose={() => setChangePwVisible(false)}
       />
     </View>
   );

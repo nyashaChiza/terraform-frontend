@@ -26,3 +26,7 @@ export async function login(credentials: Credentials) {
 export async function register(payload: { name?: string; email: string; password: string }) {
   return api.post('/auth/register', payload);
 }
+
+export async function changePassword(payload: { current_password: string; new_password: string }) {
+  return api.post('/auth/change-password', payload);
+}

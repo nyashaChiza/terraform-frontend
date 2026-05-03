@@ -35,9 +35,20 @@ export default function GoalDetail() {
   const { goal: goalParam } = useLocalSearchParams<{ goal: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [goal, setGoal] = useState<any>(() => JSON.parse(goalParam ?? '{}'));
+  const [goal, setGoal] = useState<any>(() => {
+    try { return JSON.parse(goalParam ?? '{}'); } catch { return {}; }
+  });
   const [editVisible, setEditVisible] = useState(false);
   const [closing, setClosing] = useState(false);
+
+  // Re-sync goal state when navigating to a different goal.
+  // goal-detail stays mounted in memory as a tab screen, so the useState
+  // initializer only runs once — useEffect catches subsequent param changes.
+  React.useEffect(() => {
+    if (goalParam) {
+      try { setGoal(JSON.parse(goalParam)); } catch {}
+    }
+  }, [goalParam]);
 
   const s    = STATUS_STYLES[goal.status] ?? { bg: '#f3f4f6', text: '#6b7280' };
   const meta = GOAL_META[goal.type]  ?? GOAL_META.Custom;

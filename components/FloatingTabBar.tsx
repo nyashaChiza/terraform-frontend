@@ -136,6 +136,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   iconWrapActive: {
     backgroundColor: 'rgba(255,255,255,0.93)',
