@@ -14,7 +14,6 @@ import { authStore } from '../../store/auth';
 import ProfileSheet from '../../components/ProfileSheet';
 import ChangePasswordSheet from '../../components/ChangePasswordSheet';
 import { deleteAccount } from '../../services/auth';
-import { authStore } from '../../store/auth';
 import { showError } from '../../services/toast';
 import { useRouter } from 'expo-router';
 
@@ -166,26 +165,26 @@ export default function ProfileTab() {
             </View>
           </View>
         )}
-      </ScrollView>
 
-      {/* Delete Account */}
-      <View className="mx-5 mb-4">
-        <Pressable
-          onPress={handleDeleteAccount}
-          disabled={deleting}
-          className="flex-row items-center justify-center gap-2 border border-red-400/60 rounded-2xl py-4"
-          style={{ backgroundColor: 'rgba(239,68,68,0.12)' }}
-        >
-          {deleting ? (
-            <ActivityIndicator color="#f87171" size="small" />
-          ) : (
-            <>
-              <Ionicons name="trash-outline" size={16} color="#f87171" />
-              <Text style={{ color: '#f87171', fontWeight: '700', fontSize: 14 }}>Delete Account</Text>
-            </>
-          )}
-        </Pressable>
-      </View>
+        {/* Delete Account */}
+        <View className="mx-5">
+          <Pressable
+            onPress={handleDeleteAccount}
+            disabled={deleting}
+            className="flex-row items-center justify-center gap-2 border border-red-400/60 rounded-2xl py-4"
+            style={{ backgroundColor: 'rgba(239,68,68,0.12)' }}
+          >
+            {deleting ? (
+              <ActivityIndicator color="#f87171" size="small" />
+            ) : (
+              <>
+                <Ionicons name="trash-outline" size={16} color="#f87171" />
+                <Text style={{ color: '#f87171', fontWeight: '700', fontSize: 14 }}>Delete Account</Text>
+              </>
+            )}
+          </Pressable>
+        </View>
+      </ScrollView>
 
       <ProfileSheet
         visible={editVisible}
