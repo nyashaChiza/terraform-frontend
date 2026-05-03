@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "terraform",
-    "slug": "terraform",
+    "name": "TerraForm",
+    "slug": "TerraForm",
     "version": "1.0.0",
     "sdkVersion": "54.0.0",
     "web": {
