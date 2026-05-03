@@ -5,6 +5,7 @@ import {
   Pressable,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,12 +13,17 @@ import { getProfile, updateProfile } from '../../services/profiles';
 import { authStore } from '../../store/auth';
 import ProfileSheet from '../../components/ProfileSheet';
 import ChangePasswordSheet from '../../components/ChangePasswordSheet';
+import { deleteAccount } from '../../services/auth';
+import { authStore } from '../../store/auth';
 import { showError } from '../../services/toast';
+import { useRouter } from 'expo-router';
 
 export default function ProfileTab() {
-  const insets = useSafeAreaInsets();
-  const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const insets   = useSafeAreaInsets();
+  const router   = useRouter();
+  const [profile, setProfile]                 = useState<any>(null);
+  const [loading, setLoading]                 = useState(true);
+  const [deleting, setDeleting]               = useState(false);
   const [editVisible, setEditVisible]         = useState(false);
   const [changePwVisible, setChangePwVisible] = useState(false);
 
@@ -44,6 +50,49 @@ export default function ProfileTab() {
       authStore.set({ user: res.body });
     }
     return res;
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account, goals, workout history, and all personal data. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete My Account',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Are you absolutely sure?',
+              'All your data will be erased immediately and cannot be recovered.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Yes, Delete Everything',
+                  style: 'destructive',
+                  onPress: async () => {
+                    setDeleting(true);
+                    try {
+                      const res = await deleteAccount();
+                      if (res.ok || res.status === 204) {
+                        authStore.set({ token: null, token_type: null, user: null });
+                        router.replace('/(auth)/login');
+                      } else {
+                        showError('Error', res.body?.detail ?? 'Could not delete account. Please try again.');
+                      }
+                    } catch {
+                      showError('Error', 'Please check your connection and try again.');
+                    } finally {
+                      setDeleting(false);
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -118,6 +167,25 @@ export default function ProfileTab() {
           </View>
         )}
       </ScrollView>
+
+      {/* Delete Account */}
+      <View className="mx-5 mb-4">
+        <Pressable
+          onPress={handleDeleteAccount}
+          disabled={deleting}
+          className="flex-row items-center justify-center gap-2 border border-red-400/60 rounded-2xl py-4"
+          style={{ backgroundColor: 'rgba(239,68,68,0.12)' }}
+        >
+          {deleting ? (
+            <ActivityIndicator color="#f87171" size="small" />
+          ) : (
+            <>
+              <Ionicons name="trash-outline" size={16} color="#f87171" />
+              <Text style={{ color: '#f87171', fontWeight: '700', fontSize: 14 }}>Delete Account</Text>
+            </>
+          )}
+        </Pressable>
+      </View>
 
       <ProfileSheet
         visible={editVisible}

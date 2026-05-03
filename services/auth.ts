@@ -30,3 +30,7 @@ export async function register(payload: { name?: string; email: string; password
 export async function changePassword(payload: { current_password: string; new_password: string }) {
   return api.post('/auth/change-password', payload);
 }
+
+export async function deleteAccount() {
+  return api.fetch('/auth/me', { method: 'DELETE' });
+}
