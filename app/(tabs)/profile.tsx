@@ -43,19 +43,35 @@ export default function ProfileTab() {
   const [savingUsername, setSavingUsername]     = useState(false);
 
   const loadProfile = async () => {
+    // Fire both requests in parallel so neither waits on the other.
+    // Only the profile response gates the loading spinner — the avatar
+    // updates whenever the faster/slower user request settles.
+    const profilePromise = getProfile();
+    const mePromise = apiFetch('/api/users/me', { method: 'GET' });
+
+    // ── Profile (controls the loading gate) ───────────────────────────────────
     try {
-      const res = await getProfile();
-      if (res.ok) {
-        setProfile(res.body);
-        authStore.set({ user: res.body });
-      }
-      // Load user (for profile_picture_url)
-      const stored = authStore.get();
-      if (stored.user) setUser(stored.user);
+      const profileRes = await profilePromise;
+      if (profileRes.ok) setProfile(profileRes.body);
     } catch {
       showError('Error', 'Could not load profile');
     } finally {
       setLoading(false);
+    }
+
+    // ── User / account data (profile picture, username) ───────────────────────
+    try {
+      const meRes = await mePromise;
+      if (meRes.ok) {
+        setUser(meRes.body);
+        authStore.set({ user: meRes.body });
+      } else {
+        const stored = authStore.get();
+        if (stored.user) setUser(stored.user);
+      }
+    } catch {
+      const stored = authStore.get();
+      if (stored.user) setUser(stored.user);
     }
   };
 
@@ -65,7 +81,10 @@ export default function ProfileTab() {
     const res = await updateProfile(payload);
     if (res.ok) {
       setProfile(res.body);
-      authStore.set({ user: res.body });
+      // Keep user state (and its profile_picture_url) intact — don't overwrite with profile data
+      // Just update authStore user if we already have a user loaded
+      const currentUser = authStore.get().user;
+      if (currentUser) authStore.set({ user: { ...currentUser } });
     }
     return res;
   };
@@ -306,6 +325,23 @@ export default function ProfileTab() {
             </View>
           </View>
         )}
+
+        {/* My Goals */}
+        <View className="mx-5 mb-3">
+          <Pressable
+            onPress={() => router.push('/(tabs)/goals')}
+            className="flex-row items-center gap-3 bg-white/95 rounded-2xl px-5 py-4"
+          >
+            <View className="w-9 h-9 rounded-xl bg-violet-100 items-center justify-center">
+              <Ionicons name="flag-outline" size={18} color="#6d28d9" />
+            </View>
+            <View className="flex-1">
+              <Text className="text-sm font-bold text-violet-800">My Goals</Text>
+              <Text className="text-xs text-gray-400 mt-0.5">View and manage your fitness goals</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
+          </Pressable>
+        </View>
 
         {/* My Equipment */}
         <View className="mx-5 mb-4">

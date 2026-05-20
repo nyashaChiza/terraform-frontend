@@ -88,7 +88,7 @@ export default function SignUp() {
           <Image
             source={require('../../assets/icon.png')}
             className="w-24 h-24"
-            resizeMode="contain"
+            contentFit="contain"
           />
           <Text className="text-white font-extrabold text-xl mt-3">
             TerraForm

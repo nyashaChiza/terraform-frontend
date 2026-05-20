@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,21 +9,23 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { getUnreadCount } from '../../services/notifications';
 import * as StoreReview from 'expo-store-review';
 import * as SecureStore from 'expo-secure-store';
 import { getProfile, createProfile } from '../../services/profiles';
 import { getPlannedSessions, getCompletedSessions } from '../../services/sessions';
 import { generatePlan } from '../../services/planner';
+import { getGoals } from '../../services/goals';
 import ProfileSheet from '../../components/ProfileSheet';
 import GoalSheet from '../../components/GoalSheet';
 import { authStore } from '../../store/auth';
 import { ProfileStore } from 'store/profile';
 import { showError, showSuccess } from '../../services/toast';
 
-const REVIEW_KEY = 'terraform_review_requested';
-const REVIEW_THRESHOLD = 3;
+const REVIEW_KEY            = 'terraform_review_requested';
+const REVIEW_THRESHOLD      = 3;
+const FIRST_GOAL_PROMPTED_KEY = 'terraform_goal_prompted';
 
 type Session = {
   id: number;
@@ -68,6 +70,7 @@ export default function HomeTab() {
   const [refreshing, setRefreshing] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [goalSheetVisible, setGoalSheetVisible] = useState(false);
+  const [goals, setGoals] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
   const maybeRequestReview = async (count: number) => {
@@ -82,12 +85,23 @@ export default function HomeTab() {
     } catch { /* best-effort */ }
   };
 
-  const loadHomeData = async (isRefresh = false) => {
+  const loadHomeData = async (mode: boolean | 'silent' = false) => {
+    // mode = false  → initial load, shows skeleton cards
+    // mode = true   → pull-to-refresh, shows spinner
+    // mode = 'silent' → background refresh, no visible indicator
+    const isRefresh = mode === true;
     if (isRefresh) setRefreshing(true);
-    else setCheckingProfile(true);
+    else if (mode === false) setCheckingProfile(true);
 
     try {
-      const profileRes = await getProfile();
+      const [profileRes, plannedRes, completedRes, goalsRes] = await Promise.all([
+        getProfile(),
+        getPlannedSessions(),
+        getCompletedSessions(),
+        getGoals(),
+      ]);
+
+      // ── Profile ──────────────────────────────────────────────────────────────
       if (profileRes.ok) {
         authStore.set({ user: profileRes.body });
         setInitialProfileValues(profileRes.body);
@@ -96,24 +110,39 @@ export default function HomeTab() {
         setDisplayName([first, last].filter(Boolean).join(' '));
         ProfileStore.set({ first_name: first, last_name: last, gender: profileRes.body.gender, height: profileRes.body.height, weight: profileRes.body.weight });
       } else if (profileRes.status === 404) {
+        // New user — profile sheet opens first; goal prompt fires from onSuccess
         setProfileSheetVisible(true);
       }
 
-      const plannedRes = await getPlannedSessions();
+      // ── Planned session ───────────────────────────────────────────────────────
       setPlannedSession(plannedRes.ok && plannedRes.body ? plannedRes.body : null);
 
-      const completedRes = await getCompletedSessions();
+      // ── Completed sessions ────────────────────────────────────────────────────
       if (completedRes.ok && Array.isArray(completedRes.body)) {
         setCompletedSessions(completedRes.body);
         maybeRequestReview(completedRes.body.length);
       } else {
         setCompletedSessions(EMPTY_SESSIONS);
       }
+
+      // ── Goals ─────────────────────────────────────────────────────────────────
+      const fetchedGoals = goalsRes.ok && Array.isArray(goalsRes.body) ? goalsRes.body : [];
+      setGoals(fetchedGoals);
+
+      // First-login goal prompt: only on initial load (mode === false), not silent refreshes
+      if (mode === false && fetchedGoals.length === 0 && profileRes.ok) {
+        const alreadyPrompted = await SecureStore.getItemAsync(FIRST_GOAL_PROMPTED_KEY);
+        if (!alreadyPrompted) {
+          await SecureStore.setItemAsync(FIRST_GOAL_PROMPTED_KEY, '1');
+          setGoalSheetVisible(true);
+        }
+      }
     } catch (e) {
       console.error('Home load error', e);
     } finally {
       if (isRefresh) setRefreshing(false);
-      else setCheckingProfile(false);
+      else if (mode === false) setCheckingProfile(false);
+      // 'silent' mode → nothing to clear
     }
   };
 
@@ -121,11 +150,20 @@ export default function HomeTab() {
     getUnreadCount().then(setUnreadCount).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => { if (mounted) await loadHomeData(false); })();
-    return () => { mounted = false; };
-  }, []);
+  // Track whether the very first focus has happened so we can show skeletons
+  // on mount but do a silent background refresh on every subsequent tab visit.
+  const hasLoaded = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasLoaded.current) {
+        hasLoaded.current = true;
+        loadHomeData(false);       // first load → skeletons
+      } else {
+        loadHomeData('silent');    // returning to tab → quiet background sync
+      }
+    }, []),
+  );
 
   const onGenerateSession = async () => {
     setGenerating(true);
@@ -133,7 +171,7 @@ export default function HomeTab() {
       const res = await generatePlan();
       if (res.ok) {
         showSuccess('Session Generated', 'Your personalised session is ready.');
-        await loadHomeData(false);
+        await loadHomeData('silent');
       } else if (res?.body?.detail === 'User has no goals') {
         setGoalSheetVisible(true);
       } else {
@@ -245,6 +283,42 @@ export default function HomeTab() {
           </View>
         )}
 
+        {/* Goals summary card */}
+        {checkingProfile ? (
+          <SkeletonCard height={64} />
+        ) : (() => {
+          const activeGoal = goals.find(g => g.status === 'Active');
+          const progress   = Math.round(activeGoal?.progress_pct ?? 0);
+          return activeGoal ? (
+            <Pressable onPress={() => router.push('/(tabs)/goals')} style={styles.goalsCard}>
+              <View style={styles.goalsIconWrap}>
+                <Ionicons name="flag" size={18} color="#7c3aed" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <Text style={styles.goalsCardTitle}>{activeGoal.type}</Text>
+                  <Text style={styles.goalsCardPct}>{progress}%</Text>
+                </View>
+                <View style={styles.goalProgressTrack}>
+                  <View style={[styles.goalProgressFill, { width: `${progress}%` as any }]} />
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#9ca3af" style={{ marginLeft: 10 }} />
+            </Pressable>
+          ) : (
+            <Pressable onPress={() => setGoalSheetVisible(true)} style={styles.goalsCardEmpty}>
+              <View style={styles.goalsIconWrapEmpty}>
+                <Ionicons name="flag-outline" size={18} color="#fff" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.goalsCardEmptyTitle}>No active goal</Text>
+                <Text style={styles.goalsCardEmptySub}>Set a goal to unlock AI-personalised workouts</Text>
+              </View>
+              <Ionicons name="add-circle-outline" size={22} color="rgba(255,255,255,0.6)" />
+            </Pressable>
+          );
+        })()}
+
         <Text style={styles.completedLabel}>Completed Sessions</Text>
       </View>
 
@@ -351,19 +425,37 @@ export default function HomeTab() {
           }
           return res;
         }}
-        onSuccess={profile => {
+        onSuccess={async (profile) => {
           authStore.set({ user: profile });
           setProfileSheetVisible(false);
+          // Brand-new user just created their profile — immediately prompt for a goal
+          const alreadyPrompted = await SecureStore.getItemAsync(FIRST_GOAL_PROMPTED_KEY);
+          if (!alreadyPrompted) {
+            await SecureStore.setItemAsync(FIRST_GOAL_PROMPTED_KEY, '1');
+            setGoalSheetVisible(true);
+          }
         }}
       />
       <GoalSheet
         visible={goalSheetVisible}
         onClose={() => setGoalSheetVisible(false)}
-        onCreated={async () => {
+        onCreated={async (newGoal) => {
           setGoalSheetVisible(false);
+          // Immediately reflect the new goal — no extra round-trip needed
+          if (newGoal) {
+            setGoals(prev => [newGoal, ...prev.filter((g: any) => g.id !== newGoal.id)]);
+          }
+          // Generate a planned session (best-effort — don't let a failure block the refresh)
           setGenerating(true);
-          try { await generatePlan(); await loadHomeData(false); }
-          finally { setGenerating(false); }
+          try {
+            await generatePlan();
+          } catch {
+            // User can manually generate later
+          } finally {
+            setGenerating(false);
+          }
+          // Always sync home data from server so planned session + goal progress are up to date
+          await loadHomeData(false);
         }}
       />
     </View>
@@ -540,6 +632,80 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   completedMetaTxt: { fontSize: 11, color: '#9ca3af' },
+  // Goals card — active goal
+  goalsCard: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#4c1d95',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  goalsIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#f5f3ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  goalsCardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1f2937',
+  },
+  goalsCardPct: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#7c3aed',
+  },
+  goalProgressTrack: {
+    height: 5,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  goalProgressFill: {
+    height: '100%',
+    backgroundColor: '#7c3aed',
+    borderRadius: 3,
+  },
+  // Goals card — no goal CTA
+  goalsCardEmpty: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  goalsIconWrapEmpty: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  goalsCardEmptyTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  goalsCardEmptySub: {
+    fontSize: 12,
+    color: '#c4b5fd',
+    marginTop: 2,
+  },
   // Empty state
   emptyState: {
     alignItems: 'center',

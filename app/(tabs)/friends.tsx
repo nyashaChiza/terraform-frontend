@@ -69,6 +69,8 @@ export default function FriendsTab() {
       const [f, inc] = await Promise.all([getFriends(), getIncomingRequests()]);
       setFriends(f);
       setIncoming(inc);
+      // Auto-switch to Discover tab if there are pending requests waiting
+      if (inc.length > 0) setActiveTab('discover');
     } catch (err: any) {
       showError('Error', err?.message ?? 'Could not load friends');
     } finally {
@@ -144,13 +146,30 @@ export default function FriendsTab() {
               onPress={() => setActiveTab(t)}
               className={`flex-1 py-2 rounded-lg items-center ${activeTab === t ? 'bg-white' : ''}`}
             >
-              <Text
-                className={`text-sm font-semibold capitalize ${
-                  activeTab === t ? 'text-violet-800' : 'text-white/80'
-                }`}
-              >
-                {t === 'feed' ? 'Activity Feed' : 'Discover'}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text
+                  className={`text-sm font-semibold capitalize ${
+                    activeTab === t ? 'text-violet-800' : 'text-white/80'
+                  }`}
+                >
+                  {t === 'feed' ? 'Activity Feed' : 'Discover'}
+                </Text>
+                {t === 'discover' && incoming.length > 0 && (
+                  <View style={{
+                    backgroundColor: '#ef4444',
+                    borderRadius: 8,
+                    minWidth: 16,
+                    height: 16,
+                    paddingHorizontal: 4,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>
+                      {incoming.length}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </Pressable>
           ))}
         </View>
@@ -192,8 +211,84 @@ export default function FriendsTab() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 160 }}
         >
-          {/* Search */}
+          {/* ── Incoming Requests — shown at the top so they're never missed ── */}
+          {incoming.length > 0 && (
+            <View className="mx-4 mb-4">
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Text className="text-xs font-bold uppercase tracking-widest text-white/70">
+                  Friend Requests
+                </Text>
+                <View style={{
+                  backgroundColor: '#ef4444',
+                  borderRadius: 8,
+                  minWidth: 18,
+                  height: 18,
+                  paddingHorizontal: 5,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>
+                    {incoming.length}
+                  </Text>
+                </View>
+              </View>
+              <View className="bg-white rounded-2xl overflow-hidden">
+                {incoming.map((req, index) => (
+                  <View
+                    key={req.friendship_id}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingHorizontal: 16,
+                      paddingVertical: 14,
+                      borderBottomWidth: index < incoming.length - 1 ? 1 : 0,
+                      borderBottomColor: '#f9fafb',
+                    }}
+                  >
+                    <Avatar profilePictureUrl={req.from.profile_picture_url} name={req.from.username} size={44} />
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={{ fontWeight: '700', color: '#1f2937', fontSize: 14 }}>
+                        @{req.from.username}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#9ca3af', marginTop: 1 }}>
+                        Wants to be your friend
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <Pressable
+                        onPress={() => handleDecline(req)}
+                        style={{
+                          paddingHorizontal: 14,
+                          paddingVertical: 7,
+                          borderRadius: 20,
+                          backgroundColor: '#f3f4f6',
+                        }}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#6b7280' }}>Decline</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => handleAccept(req)}
+                        style={{
+                          paddingHorizontal: 14,
+                          paddingVertical: 7,
+                          borderRadius: 20,
+                          backgroundColor: '#7c3aed',
+                        }}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#fff' }}>Accept</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* ── Search ────────────────────────────────────────────────────────── */}
           <View className="mx-4 mb-4">
+            <Text className="text-xs font-bold uppercase tracking-widest text-white/70 mb-2">
+              Find People
+            </Text>
             <View className="flex-row items-center bg-white/95 rounded-2xl px-4 py-3 gap-2">
               <Ionicons name="search-outline" size={18} color="#9ca3af" />
               <TextInput
@@ -228,38 +323,7 @@ export default function FriendsTab() {
             )}
           </View>
 
-          {/* Incoming Requests */}
-          {incoming.length > 0 && (
-            <View className="mx-4 mb-4">
-              <Text className="text-xs font-bold uppercase tracking-widest text-white/70 mb-2">
-                Friend Requests ({incoming.length})
-              </Text>
-              <View className="bg-white rounded-2xl overflow-hidden">
-                {incoming.map(req => (
-                  <View key={req.friendship_id} className="flex-row items-center px-4 py-3 border-b border-gray-50">
-                    <Avatar profilePictureUrl={req.from.profile_picture_url} name={req.from.username} size={40} />
-                    <Text className="flex-1 ml-3 font-semibold text-gray-800">@{req.from.username}</Text>
-                    <View className="flex-row gap-2">
-                      <Pressable
-                        onPress={() => handleDecline(req)}
-                        className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center"
-                      >
-                        <Ionicons name="close" size={16} color="#6b7280" />
-                      </Pressable>
-                      <Pressable
-                        onPress={() => handleAccept(req)}
-                        className="w-8 h-8 rounded-full bg-green-500 items-center justify-center"
-                      >
-                        <Ionicons name="checkmark" size={16} color="#fff" />
-                      </Pressable>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* Friends list */}
+          {/* ── Friends list ──────────────────────────────────────────────────── */}
           <View className="mx-4">
             <Text className="text-xs font-bold uppercase tracking-widest text-white/70 mb-2">
               Friends {friends.length > 0 ? `(${friends.length})` : ''}

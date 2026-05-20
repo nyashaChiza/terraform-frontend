@@ -1,5 +1,6 @@
 import React from 'react';
-import { Image, View, Text, StyleSheet } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
+import { View, Text, StyleSheet } from 'react-native';
 
 interface AvatarProps {
   /** Cloudinary URL — if null/undefined, falls back to initials */
@@ -30,8 +31,10 @@ export function Avatar({ profilePictureUrl, name, size = 48 }: AvatarProps) {
 
   if (profilePictureUrl) {
     return (
-      <Image
+      <ExpoImage
         source={{ uri: profilePictureUrl }}
+        contentFit="cover"
+        cachePolicy="memory-disk"
         style={{ width: size, height: size, borderRadius: radius }}
       />
     );

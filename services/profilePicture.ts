@@ -18,7 +18,7 @@ export async function pickAndUploadProfilePicture(): Promise<{ profile_picture_u
 
   // Open image picker (square crop UI)
   const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    mediaTypes: ImagePicker.MediaType.Images,
     allowsEditing: true,
     aspect: [1, 1],
     quality: 1,

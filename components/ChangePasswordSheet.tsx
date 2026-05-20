@@ -10,7 +10,9 @@ import {
   Platform,
   KeyboardAvoidingView,
   StyleSheet,
+  useWindowDimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { changePassword } from '../services/auth';
 import { showError, showSuccess } from '../services/toast';
@@ -29,6 +31,10 @@ function getPasswordErrors(pw: string): string[] {
 }
 
 export default function ChangePasswordSheet({ visible, onClose }: Props) {
+  const { height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const maxSheetHeight = windowHeight - insets.top - 16;
+
   const [currentPw, setCurrentPw]       = useState('');
   const [newPw, setNewPw]               = useState('');
   const [confirmPw, setConfirmPw]       = useState('');
@@ -93,7 +99,7 @@ export default function ChangePasswordSheet({ visible, onClose }: Props) {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1, justifyContent: 'flex-end' }}
       >
-        <View className="bg-white rounded-t-3xl">
+        <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: maxSheetHeight, flexDirection: 'column' }}>
           {/* Header */}
           <View className="px-6 pt-6 pb-4 border-b border-gray-100">
             <Text className="text-2xl font-extrabold text-violet-800">Change Password</Text>
@@ -104,8 +110,7 @@ export default function ChangePasswordSheet({ visible, onClose }: Props) {
             className="px-6"
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            automaticallyAdjustKeyboardInsets
-            contentContainerStyle={{ paddingBottom: 40 }}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
           >
             {/* Current password */}
             <View style={{ marginTop: 20 }}>

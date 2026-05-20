@@ -10,7 +10,9 @@ import {
   Platform,
   KeyboardAvoidingView,
   StyleSheet,
+  useWindowDimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { createGoal, updateGoal } from '../services/goals';
 import { showError, showSuccess } from '../services/toast';
@@ -34,6 +36,11 @@ const GOAL_TYPES = [
 ] as const;
 
 export default function GoalSheet({ visible, onClose, mode = 'create', goalId, initialValues, onCreated, onUpdated }: Props) {
+  const { height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  // Sheet is capped so it never slides above the status bar / Dynamic Island
+  const maxSheetHeight = windowHeight - insets.top - 16;
+
   const [type, setType] = useState<typeof GOAL_TYPES[number]>('WeightLoss');
   const [description, setDescription] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -105,7 +112,11 @@ export default function GoalSheet({ visible, onClose, mode = 'create', goalId, i
         else onCreated?.(res.body);
         onClose();
       } else {
-        showError(mode === 'update' ? 'Update failed' : 'Create failed', JSON.stringify(res.body));
+        // Extract a human-readable message from the backend response
+        const detail = Array.isArray(res.body?.detail)
+          ? (res.body.detail[0]?.msg ?? 'Something went wrong')
+          : (res.body?.detail ?? res.body?.message ?? 'Something went wrong');
+        showError(mode === 'update' ? 'Update failed' : 'Create failed', detail);
       }
     } catch (err: any) {
       showError('Error', err?.message ?? 'Failed to create goal');
@@ -155,8 +166,9 @@ export default function GoalSheet({ visible, onClose, mode = 'create', goalId, i
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1, justifyContent: 'flex-end' }}
       >
-          <View className="bg-white rounded-t-3xl">
-            {/* Header */}
+          {/* maxHeight stops the sheet from sliding above the status bar when the keyboard opens */}
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: maxSheetHeight, flexDirection: 'column' }}>
+            {/* Header — always visible, never scrolls */}
             <View className="px-6 pt-6 pb-4 border-b border-gray-100">
               <Text className="text-2xl font-extrabold text-violet-800">
                 {mode === 'update' ? 'Edit Goal' : 'Create Goal'}
@@ -170,8 +182,7 @@ export default function GoalSheet({ visible, onClose, mode = 'create', goalId, i
               className="px-6"
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
-              automaticallyAdjustKeyboardInsets={true}
-              contentContainerStyle={{ paddingBottom: 40 }}
+              contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
             >
               {/* Goal Type */}
               <View className="mt-5">

@@ -3,8 +3,10 @@ import { authStore } from '../store/auth';
 // Base URL for backend APIs.
 // - Local dev:  set EXPO_PUBLIC_API_URL in .env.local  (gitignored)
 // - EAS builds: falls back to the production URL below (set in .env)
-export const BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ?? 'https://terraform-backend.vercel.app';
+// Trailing slash is stripped so `${BASE_URL}/path` never produces a double-slash.
+export const BASE_URL = (
+  process.env.EXPO_PUBLIC_API_URL ?? 'https://terraform-backend.vercel.app'
+).replace(/\/+$/, '');
 
 function buildUrl(url: string): string {
   if (/^https?:\/\//i.test(url)) return url;

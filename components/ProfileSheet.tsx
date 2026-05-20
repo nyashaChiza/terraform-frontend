@@ -10,7 +10,9 @@ import {
   Platform,
   KeyboardAvoidingView,
   StyleSheet,
+  useWindowDimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { showError, showSuccess } from '../services/toast';
 
@@ -43,6 +45,10 @@ export default function ProfileSheet({
   onSuccess,
   onClose,
 }: Props) {
+  const { height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const maxSheetHeight = windowHeight - insets.top - 16;
+
   const [form, setForm] = useState<ProfilePayload>({
     first_name: '',
     last_name: '',
@@ -197,7 +203,7 @@ export default function ProfileSheet({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1, justifyContent: 'flex-end' }}
       >
-          <View className="bg-white rounded-t-3xl">
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: maxSheetHeight, flexDirection: 'column' }}>
             {/* Header */}
             <View className="px-6 pt-6 pb-4 border-b border-gray-100">
               <Text className="text-2xl font-extrabold text-violet-800">
@@ -211,8 +217,7 @@ export default function ProfileSheet({
             <ScrollView
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
-              automaticallyAdjustKeyboardInsets={true}
-              contentContainerStyle={{ paddingBottom: 40 }}
+              contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
               className="px-6"
             >
               {/* Name Fields */}

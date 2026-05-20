@@ -35,21 +35,19 @@ export default function Login() {
     setLoading(true);
     try {
       const res = await loginSvc({ email, password });
-      const token =
-        res?.access_token ??
-        res?.token ??
-        res?.accessToken ??
-        null;
 
-      const token_type = res?.token_type ?? res?.tokenType ?? 'Bearer';
-      const user = res?.user ?? null;
+      const token         = res?.access_token ?? res?.token ?? res?.accessToken ?? null;
+      const refresh_token = res?.refresh_token ?? null;
+      const token_type    = res?.token_type ?? res?.tokenType ?? 'Bearer';
 
       if (!token) {
-        showError('Login failed', res?.message ?? 'Invalid credentials');
+        // Show the error detail returned by the backend (e.g. "Invalid email or password")
+        const msg = res?.detail ?? res?.message ?? 'Invalid credentials';
+        showError('Login failed', Array.isArray(msg) ? msg[0]?.msg ?? 'Invalid credentials' : msg);
         return;
       }
 
-      authStore.set({ token, token_type, user });
+      authStore.set({ token, refresh_token, token_type, user: null });
       showSuccess('Signed in');
       router.replace('/(tabs)/home');
     } catch (err: any) {
