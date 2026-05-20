@@ -10,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { getUnreadCount } from '../../services/notifications';
 import * as StoreReview from 'expo-store-review';
 import * as SecureStore from 'expo-secure-store';
 import { getProfile, createProfile } from '../../services/profiles';
@@ -67,6 +68,7 @@ export default function HomeTab() {
   const [refreshing, setRefreshing] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [goalSheetVisible, setGoalSheetVisible] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const maybeRequestReview = async (count: number) => {
     try {
@@ -116,6 +118,10 @@ export default function HomeTab() {
   };
 
   useEffect(() => {
+    getUnreadCount().then(setUnreadCount).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     let mounted = true;
     (async () => { if (mounted) await loadHomeData(false); })();
     return () => { mounted = false; };
@@ -144,11 +150,29 @@ export default function HomeTab() {
     <View style={{ flex: 1, backgroundColor: '#7c3aed' }}>
       {/* Fixed top section */}
       <View style={[styles.topSection, { paddingTop: insets.top + 16 }]}>
-        {/* Greeting */}
-        <Text style={styles.greeting}>
-          {displayName ? `Hey, ${displayName.split(' ')[0]}` : 'Welcome back'}
-        </Text>
-        <Text style={styles.greetingSub}>Ready for today's session?</Text>
+        {/* Greeting + Bell */}
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.greeting}>
+              {displayName ? `Hey, ${displayName.split(' ')[0]}` : 'Welcome back'}
+            </Text>
+            <Text style={styles.greetingSub}>Ready for today's session?</Text>
+          </View>
+          <Pressable
+            onPress={() => router.push('/(tabs)/notifications')}
+            style={{ position: 'relative', padding: 4, marginTop: -2 }}
+          >
+            <Ionicons name="notifications-outline" size={24} color="rgba(255,255,255,0.8)" />
+            {unreadCount > 0 && (
+              <View style={{
+                position: 'absolute', top: 2, right: 2,
+                width: 10, height: 10, borderRadius: 5,
+                backgroundColor: '#ef4444',
+                borderWidth: 1.5, borderColor: '#7c3aed',
+              }} />
+            )}
+          </Pressable>
+        </View>
 
         {/* Planned session card / skeleton / generate */}
         {checkingProfile ? (

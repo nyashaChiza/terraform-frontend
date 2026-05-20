@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "feature-graphic",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "-l", "4800", "."],
+      "port": 4800
+    }
+  ]
+}

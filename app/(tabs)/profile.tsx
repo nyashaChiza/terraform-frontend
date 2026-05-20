@@ -2,10 +2,16 @@ import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   Pressable,
   ScrollView,
   ActivityIndicator,
   Alert,
+  ActionSheetIOS,
+  Platform,
+  StyleSheet,
+  Modal,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,18 +19,28 @@ import { getProfile, updateProfile } from '../../services/profiles';
 import { authStore } from '../../store/auth';
 import ProfileSheet from '../../components/ProfileSheet';
 import ChangePasswordSheet from '../../components/ChangePasswordSheet';
+import { Avatar } from '../../components/Avatar';
 import { deleteAccount } from '../../services/auth';
-import { showError } from '../../services/toast';
+import { pickAndUploadProfilePicture, removeProfilePicture } from '../../services/profilePicture';
+import { showError, showSuccess } from '../../services/toast';
 import { useRouter } from 'expo-router';
+import EquipmentSheet from '../../components/EquipmentSheet';
+import { apiFetch } from '../../services/api';
 
 export default function ProfileTab() {
   const insets   = useSafeAreaInsets();
   const router   = useRouter();
   const [profile, setProfile]                 = useState<any>(null);
+  const [user, setUser]                       = useState<any>(null);
   const [loading, setLoading]                 = useState(true);
+  const [uploading, setUploading]             = useState(false);
   const [deleting, setDeleting]               = useState(false);
-  const [editVisible, setEditVisible]         = useState(false);
-  const [changePwVisible, setChangePwVisible] = useState(false);
+  const [editVisible, setEditVisible]           = useState(false);
+  const [changePwVisible, setChangePwVisible]   = useState(false);
+  const [equipmentVisible, setEquipmentVisible] = useState(false);
+  const [usernameModalVisible, setUsernameModalVisible] = useState(false);
+  const [newUsername, setNewUsername]           = useState('');
+  const [savingUsername, setSavingUsername]     = useState(false);
 
   const loadProfile = async () => {
     try {
@@ -33,6 +49,9 @@ export default function ProfileTab() {
         setProfile(res.body);
         authStore.set({ user: res.body });
       }
+      // Load user (for profile_picture_url)
+      const stored = authStore.get();
+      if (stored.user) setUser(stored.user);
     } catch {
       showError('Error', 'Could not load profile');
     } finally {
@@ -51,6 +70,101 @@ export default function ProfileTab() {
     return res;
   };
 
+  // ── Avatar press — show action sheet ─────────────────────────────────────
+  const handleAvatarPress = () => {
+    const hasPhoto = !!user?.profile_picture_url;
+    const options = hasPhoto
+      ? ['Change Photo', 'Remove Photo', 'Cancel']
+      : ['Upload Photo', 'Cancel'];
+    const cancelIndex = options.length - 1;
+    const destructiveIndex = hasPhoto ? 1 : undefined;
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options, cancelButtonIndex: cancelIndex, destructiveButtonIndex: destructiveIndex },
+        (index) => {
+          if (index === 0) handleUploadPhoto();
+          if (hasPhoto && index === 1) handleRemovePhoto();
+        },
+      );
+    } else {
+      // Android — use an Alert as a simple action sheet replacement
+      const buttons: any[] = [
+        { text: hasPhoto ? 'Change Photo' : 'Upload Photo', onPress: handleUploadPhoto },
+      ];
+      if (hasPhoto) {
+        buttons.push({ text: 'Remove Photo', style: 'destructive', onPress: handleRemovePhoto });
+      }
+      buttons.push({ text: 'Cancel', style: 'cancel' });
+      Alert.alert('Profile Photo', '', buttons);
+    }
+  };
+
+  const handleUploadPhoto = async () => {
+    setUploading(true);
+    try {
+      const result = await pickAndUploadProfilePicture();
+      if (result) {
+        const updated = { ...user, profile_picture_url: result.profile_picture_url };
+        setUser(updated);
+        authStore.set({ user: updated });
+      }
+    } catch (err: any) {
+      showError('Upload Failed', err?.message ?? 'Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    setUploading(true);
+    try {
+      await removeProfilePicture();
+      const updated = { ...user, profile_picture_url: null };
+      setUser(updated);
+      authStore.set({ user: updated });
+    } catch (err: any) {
+      showError('Error', err?.message ?? 'Could not remove photo.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // ── Change username ───────────────────────────────────────────────────────
+  const handleSaveUsername = async () => {
+    const trimmed = newUsername.trim();
+    if (!trimmed || trimmed.length < 2) {
+      showError('Validation', 'Username must be at least 2 characters');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(trimmed)) {
+      showError('Validation', 'Only letters, numbers, and underscores allowed');
+      return;
+    }
+    setSavingUsername(true);
+    try {
+      const { ok, body } = await apiFetch('/api/users/me/username', {
+        method: 'PATCH',
+        body: JSON.stringify({ username: trimmed }),
+      });
+      if (ok) {
+        const updated = { ...user, username: body.username };
+        setUser(updated);
+        authStore.set({ user: updated });
+        showSuccess('Username updated');
+        setUsernameModalVisible(false);
+        setNewUsername('');
+      } else {
+        showError('Error', (body as any)?.detail ?? 'Could not update username');
+      }
+    } catch (err: any) {
+      showError('Error', err?.message ?? 'Failed to save');
+    } finally {
+      setSavingUsername(false);
+    }
+  };
+
+  // ── Delete account ────────────────────────────────────────────────────────
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete Account',
@@ -103,7 +217,6 @@ export default function ProfileTab() {
   }
 
   const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || 'Your Profile';
-  const initials = [profile?.first_name?.[0], profile?.last_name?.[0]].filter(Boolean).join('').toUpperCase() || '?';
 
   return (
     <View className="flex-1 bg-violet-700">
@@ -113,11 +226,39 @@ export default function ProfileTab() {
       >
         {/* Header */}
         <View className="px-5 pb-6 items-center" style={{ paddingTop: insets.top + 16 }}>
-          {/* Avatar */}
-          <View className="w-24 h-24 rounded-full bg-white/25 items-center justify-center mb-4 border-2 border-white/40">
-            <Text className="text-white text-3xl font-extrabold">{initials}</Text>
-          </View>
-          <Text className="text-white text-2xl font-extrabold">{fullName}</Text>
+
+          {/* Tappable avatar with camera overlay */}
+          <Pressable onPress={handleAvatarPress} style={styles.avatarWrap}>
+            {uploading ? (
+              <View style={styles.avatarLoader}>
+                <ActivityIndicator color="#fff" size="small" />
+              </View>
+            ) : (
+              <Avatar
+                profilePictureUrl={user?.profile_picture_url}
+                name={fullName}
+                size={96}
+              />
+            )}
+            {/* Camera badge */}
+            <View style={styles.cameraBadge}>
+              <Ionicons name="camera" size={12} color="#fff" />
+            </View>
+          </Pressable>
+
+          <Text className="text-white text-2xl font-extrabold mt-3">{fullName}</Text>
+          {user?.username ? (
+            <Pressable
+              onPress={() => {
+                setNewUsername(user.username ?? '');
+                setUsernameModalVisible(true);
+              }}
+              className="flex-row items-center gap-1 mt-1"
+            >
+              <Text className="text-violet-200 text-sm">@{user.username}</Text>
+              <Ionicons name="pencil" size={11} color="rgba(221,214,254,0.7)" />
+            </Pressable>
+          ) : null}
           {profile?.phone_number ? (
             <Text className="text-violet-200 mt-1">{profile.phone_number}</Text>
           ) : null}
@@ -166,6 +307,23 @@ export default function ProfileTab() {
           </View>
         )}
 
+        {/* My Equipment */}
+        <View className="mx-5 mb-4">
+          <Pressable
+            onPress={() => setEquipmentVisible(true)}
+            className="flex-row items-center gap-3 bg-white/95 rounded-2xl px-5 py-4"
+          >
+            <View className="w-9 h-9 rounded-xl bg-violet-100 items-center justify-center">
+              <Ionicons name="barbell-outline" size={18} color="#6d28d9" />
+            </View>
+            <View className="flex-1">
+              <Text className="text-sm font-bold text-violet-800">My Equipment</Text>
+              <Text className="text-xs text-gray-400 mt-0.5">Customize which equipment to include in workouts</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
+          </Pressable>
+        </View>
+
         {/* Delete Account */}
         <View className="mx-5">
           <Pressable
@@ -202,9 +360,91 @@ export default function ProfileTab() {
         visible={changePwVisible}
         onClose={() => setChangePwVisible(false)}
       />
+
+      <EquipmentSheet
+        visible={equipmentVisible}
+        onClose={() => setEquipmentVisible(false)}
+      />
+
+      {/* Change Username Modal */}
+      <Modal visible={usernameModalVisible} transparent animationType="fade">
+        {/* Backdrop — tapping outside closes the modal */}
+        <Pressable
+          style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
+          onPress={() => setUsernameModalVisible(false)}
+        />
+        {/* Card — centered, lifts above keyboard */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24 }}
+        >
+          <View className="bg-white rounded-3xl p-6">
+            <Text className="text-lg font-extrabold text-violet-800 mb-1">Change Username</Text>
+            <Text className="text-sm text-gray-500 mb-4">
+              Letters, numbers, and underscores only. Min 2 characters.
+            </Text>
+            <TextInput
+              value={newUsername}
+              onChangeText={setNewUsername}
+              placeholder="new_username"
+              placeholderTextColor="#9ca3af"
+              autoCapitalize="none"
+              autoCorrect={false}
+              className="border border-gray-200 rounded-xl px-4 py-3 text-base text-gray-800 mb-4"
+            />
+            <View className="flex-row gap-3">
+              <Pressable
+                onPress={() => setUsernameModalVisible(false)}
+                className="flex-1 py-3 rounded-xl bg-gray-100 items-center"
+              >
+                <Text className="font-semibold text-gray-600">Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleSaveUsername}
+                disabled={savingUsername}
+                className="flex-1 py-3 rounded-xl bg-violet-700 items-center"
+              >
+                {savingUsername ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text className="font-bold text-white">Save</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  avatarWrap: {
+    position: 'relative',
+    marginBottom: 4,
+  },
+  avatarLoader: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#7c3aed',
+    borderWidth: 2,
+    borderColor: '#5b21b6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
 
 function StatCard({ label, value, icon }: { label: string; value: string; icon: string }) {
   return (
