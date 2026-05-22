@@ -87,13 +87,34 @@ export default function ProfileSheet({
 
   const validate = () => {
     if (!form.first_name.trim()) return 'First name is required';
+    if (form.first_name.trim().length > 50) return 'First name is too long';
     if (!form.last_name.trim()) return 'Last name is required';
+    if (form.last_name.trim().length > 50) return 'Last name is too long';
     if (!form.date_of_birth) return 'Date of birth is required';
-    if (form.height <= 0) return 'Height must be greater than 0';
-    if (form.weight <= 0) return 'Weight must be greater than 0';
+    // Sensible human ranges — catches typos like 5 cm or 5 kg
+    if (form.height < 100 || form.height > 250) return 'Height must be between 100 and 250 cm';
+    if (form.weight < 30 || form.weight > 300) return 'Weight must be between 30 and 300 kg';
+    // Date of birth: reject absurd dates (e.g. 1899 or future dates)
+    const dob = new Date(form.date_of_birth);
+    if (Number.isNaN(dob.getTime())) return 'Invalid date of birth';
+    const now = new Date();
+    const minDob = new Date(now.getFullYear() - 120, now.getMonth(), now.getDate());
+    const maxDob = new Date(now.getFullYear() - 13, now.getMonth(), now.getDate());
+    if (dob < minDob) return 'Date of birth seems too far in the past';
+    if (dob > maxDob) return 'You must be at least 13 years old';
+    // Sessions per week: 1-7
+    if (form.preferred_sessions_per_week < 1 || form.preferred_sessions_per_week > 7) {
+      return 'Sessions per week must be between 1 and 7';
+    }
     // phone_number is optional — only validate format if provided
-    if (form.phone_number?.trim() && form.phone_number.trim().length < 7) {
-      return 'Phone number must be at least 7 digits';
+    if (form.phone_number?.trim()) {
+      const cleaned = form.phone_number.replace(/[\s\-()]/g, '');
+      if (cleaned.length < 7 || cleaned.length > 20) {
+        return 'Phone number must be 7-20 digits';
+      }
+      if (!/^\+?\d+$/.test(cleaned)) {
+        return 'Phone number can only contain digits and an optional leading +';
+      }
     }
     return null;
   };

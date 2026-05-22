@@ -1,6 +1,14 @@
 import { Toast } from 'react-native-alert-notification';
 
-type ToastOpts = { title?: string; message?: string };
+/**
+ * Toast convention (use these titles consistently across the app):
+ *   - "Validation"    → user input is bad (missing fields, out-of-range, etc.)
+ *   - "Error"         → unexpected failure, network, or server-side issue
+ *   - Action-specific → "Update failed", "Upload failed", etc. when the action
+ *                       context is helpful for the user
+ * Avoid creative variations like "Network error", "Couldn't load X" — pick
+ * one of the three above for consistency.
+ */
 
 export function showSuccess(titleOrMessage?: string, message?: string) {
   const title = message ? titleOrMessage : 'Success';
@@ -20,4 +28,10 @@ export function showInfo(titleOrMessage?: string, message?: string) {
   Toast.show({ type: 'NORMAL', title: String(title), textBody: String(textBody) });
 }
 
-export default { showSuccess, showError, showInfo };
+// Semantic helpers — preferred over showError(specific_title, ...) so titles
+// stay consistent across the app.
+export const showValidationError = (msg: string) => showError('Validation', msg);
+export const showNetworkError = (msg = 'Please check your connection and try again.') =>
+  showError('Error', msg);
+
+export default { showSuccess, showError, showInfo, showValidationError, showNetworkError };

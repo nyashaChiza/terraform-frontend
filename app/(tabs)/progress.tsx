@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,22 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from 'expo-router';
 import { getStatsSummary, StatsSummary } from '../../services/stats';
+
+// Default stats for new users with no completed sessions yet — used so the
+// screen always renders empty-state cards instead of an error.
+const EMPTY_STATS: StatsSummary = {
+  total_sessions: 0,
+  streak: 0,
+  sessions_this_week: 0,
+  weekly_counts: Array.from({ length: 8 }, (_, i) => ({
+    label: i >= 4 ? `${i - 3}` : `W${i + 1}`,
+    count: 0,
+  })),
+  personal_records: [],
+  total_prs: 0,
+};
 
 // ─── Skeleton ──────────────────────────────────────────────────────────────
 
@@ -90,15 +105,57 @@ export default function ProgressTab() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
 
-  const loadStats = useCallback(async (isRefresh = false) => {
+  const loadStats = useCallback(async (isRefresh = false, attempt = 1) => {
     if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+    else if (attempt === 1) setLoading(true);
     setError(false);
     try {
       const res = await getStatsSummary();
-      if (res.ok && res.body) setStats(res.body);
-      else setError(true);
-    } catch {
+
+      // 2xx with data — render whatever the server returned, with safe defaults
+      if (res.ok) {
+        const body: any = res.body ?? {};
+        setStats({
+          total_sessions: Number(body.total_sessions ?? 0),
+          streak: Number(body.streak ?? 0),
+          sessions_this_week: Number(body.sessions_this_week ?? 0),
+          weekly_counts: Array.isArray(body.weekly_counts) && body.weekly_counts.length > 0
+            ? body.weekly_counts
+            : EMPTY_STATS.weekly_counts,
+          personal_records: Array.isArray(body.personal_records) ? body.personal_records : [],
+          total_prs: Number(body.total_prs ?? 0),
+        });
+        return;
+      }
+
+      // 404 — user has no completed sessions yet, show empty state, not error
+      if (res.status === 404) {
+        setStats(EMPTY_STATS);
+        return;
+      }
+
+      // 408 (client timeout) / 502 / 503 / 504 — transient gateway/timeout issues.
+      // Auto-retry once with a short delay; if it still fails, fall back to empty
+      // stats so the user sees the chart skeletons instead of a scary error.
+      const isTransient = [408, 502, 503, 504].includes(res.status);
+      if (isTransient && attempt === 1) {
+        console.warn(`Stats summary ${res.status} — retrying once…`);
+        await new Promise(r => setTimeout(r, 800));
+        return loadStats(isRefresh, 2);
+      }
+
+      if (isTransient) {
+        // Retry also failed — degrade gracefully to empty state, not error screen
+        console.warn('Stats summary still timing out — showing empty state.');
+        setStats(EMPTY_STATS);
+        return;
+      }
+
+      // Real server error (5xx other than gateway timeouts) or auth failure
+      console.warn('Stats summary failed:', res.status, res.body);
+      setError(true);
+    } catch (e) {
+      console.error('loadStats error', e);
       setError(true);
     } finally {
       setLoading(false);
@@ -106,7 +163,13 @@ export default function ProgressTab() {
     }
   }, []);
 
-  useEffect(() => { loadStats(); }, [loadStats]);
+  // Refresh stats every time the tab gains focus (after generating a session,
+  // completing one elsewhere, returning from a navigation, etc.)
+  useFocusEffect(
+    useCallback(() => {
+      loadStats();
+    }, [loadStats]),
+  );
 
   const streakColor = (n: number) => n >= 7 ? '#dc2626' : n >= 3 ? '#ea580c' : n >= 1 ? '#7c3aed' : '#9ca3af';
 

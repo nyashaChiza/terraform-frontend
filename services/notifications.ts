@@ -13,9 +13,14 @@ export interface AppNotification {
 }
 
 export async function getNotifications(): Promise<AppNotification[]> {
-  const { ok, body } = await apiFetch<AppNotification[]>('/api/notifications/');
-  if (!ok) throw new Error('Failed to load notifications');
-  return body;
+  // Graceful: return [] on failure so the screen shows "No notifications" /
+  // empty state rather than an error toast. apiFetch already retried.
+  const { ok, body, status } = await apiFetch<AppNotification[]>('/api/notifications/');
+  if (!ok) {
+    console.warn(`Notifications unavailable (status ${status}) — showing empty state`);
+    return [];
+  }
+  return Array.isArray(body) ? body : [];
 }
 
 export async function getUnreadCount(): Promise<number> {

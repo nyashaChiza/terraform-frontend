@@ -21,15 +21,23 @@ export async function searchUsers(query: string): Promise<PublicUser[]> {
 }
 
 export async function getFriends(): Promise<PublicUser[]> {
-  const { ok, body } = await apiFetch<PublicUser[]>('/api/friends/');
-  if (!ok) throw new Error('Failed to load friends');
-  return body;
+  // Graceful degradation: on persistent failure, return [] so the screen
+  // shows the empty state instead of a toast. apiFetch already retried.
+  const { ok, body, status } = await apiFetch<PublicUser[]>('/api/friends/');
+  if (!ok) {
+    console.warn(`Friends list unavailable (status ${status}) — showing empty state`);
+    return [];
+  }
+  return Array.isArray(body) ? body : [];
 }
 
 export async function getIncomingRequests(): Promise<IncomingRequest[]> {
-  const { ok, body } = await apiFetch<IncomingRequest[]>('/api/friends/requests/incoming');
-  if (!ok) throw new Error('Failed to load requests');
-  return body;
+  const { ok, body, status } = await apiFetch<IncomingRequest[]>('/api/friends/requests/incoming');
+  if (!ok) {
+    console.warn(`Incoming requests unavailable (status ${status}) — showing empty state`);
+    return [];
+  }
+  return Array.isArray(body) ? body : [];
 }
 
 export async function getFriendshipStatus(

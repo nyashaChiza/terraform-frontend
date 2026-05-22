@@ -54,9 +54,15 @@ export default function FriendsTab() {
   const loadFeed = async (quiet = false) => {
     if (!quiet) setFeedLoading(true);
     try {
-      setFeed(await getFeed());
+      const fetched = await getFeed();
+      // Only replace the feed if we got actual data. An empty response from a
+      // failed fetch (apiFetch returns [] after retries exhausted) shouldn't
+      // wipe the user's existing visible feed.
+      if (fetched.length > 0) setFeed(fetched);
+      else if (feed.length === 0) setFeed([]); // first load, genuinely empty
     } catch (err: any) {
-      showError('Error', err?.message ?? 'Could not load feed');
+      // Services no longer throw on transient failure — this catches genuine bugs
+      console.warn('loadFeed error', err);
     } finally {
       setFeedLoading(false);
       setFeedRefreshing(false);
@@ -67,12 +73,13 @@ export default function FriendsTab() {
     setFriendsLoading(true);
     try {
       const [f, inc] = await Promise.all([getFriends(), getIncomingRequests()]);
-      setFriends(f);
-      setIncoming(inc);
+      // Keep prior data if the fresh fetch came back empty due to a network blip
+      if (f.length > 0 || friends.length === 0) setFriends(f);
+      if (inc.length > 0 || incoming.length === 0) setIncoming(inc);
       // Auto-switch to Discover tab if there are pending requests waiting
       if (inc.length > 0) setActiveTab('discover');
     } catch (err: any) {
-      showError('Error', err?.message ?? 'Could not load friends');
+      console.warn('loadDiscover error', err);
     } finally {
       setFriendsLoading(false);
     }

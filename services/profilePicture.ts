@@ -17,8 +17,10 @@ export async function pickAndUploadProfilePicture(): Promise<{ profile_picture_u
   }
 
   // Open image picker (square crop UI)
+  // Note: in newer expo-image-picker, `MediaType` is a TypeScript type only —
+  // not a runtime enum. Pass the string literal `'images'` (or an array) instead.
   const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ImagePicker.MediaType.Images,
+    mediaTypes: ['images'],
     allowsEditing: true,
     aspect: [1, 1],
     quality: 1,

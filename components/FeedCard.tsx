@@ -134,25 +134,44 @@ export default function FeedCard({ session, onReactionChange }: Props) {
             <View
               style={{
                 position: 'absolute',
-                bottom: 38,
+                bottom: 42,
                 left: 0,
                 flexDirection: 'row',
-                backgroundColor: '#fff',
-                borderRadius: 16,
-                padding: 8,
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                // Light slate that fits the app's white-card + violet theme.
+                // Subtle enough not to compete with the violet accents, distinct
+                // enough to read as a floating menu over the white card.
+                backgroundColor: '#f1f5f9',       // slate-100
+                borderRadius: 22,
+                paddingHorizontal: 10,
+                paddingVertical: 8,
                 borderWidth: 1,
-                borderColor: '#f3f4f6',
+                borderColor: '#e2e8f0',           // slate-200 — soft outline
+                // Explicit width so all 5 emojis render inside the pill.
+                // Without this, the absolute child inherits its 32-px wrapper's
+                // available width and the last 3 emojis overflow visibly.
+                width: 230,
                 zIndex: 999,
-                elevation: 8,          // Android stacking
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
+                elevation: 8,                     // Android stacking
+                shadowColor: '#1e293b',
+                shadowOffset: { width: 0, height: 4 },
                 shadowOpacity: 0.12,
-                shadowRadius: 8,
+                shadowRadius: 12,
               }}
             >
               {EMOJI_OPTIONS.map(e => (
-                <Pressable key={e} onPress={() => handleReact(e)} style={{ padding: 4 }}>
-                  <Text style={{ fontSize: 20 }}>{e}</Text>
+                <Pressable
+                  key={e}
+                  onPress={() => handleReact(e)}
+                  style={({ pressed }) => ({
+                    paddingHorizontal: 4,
+                    paddingVertical: 2,
+                    borderRadius: 14,
+                    backgroundColor: pressed ? 'rgba(124,58,237,0.12)' : 'transparent',
+                  })}
+                >
+                  <Text style={{ fontSize: 22 }}>{e}</Text>
                 </Pressable>
               ))}
             </View>

@@ -171,16 +171,27 @@ export default function HomeTab() {
       const res = await generatePlan();
       if (res.ok) {
         showSuccess('Session Generated', 'Your personalised session is ready.');
-        await loadHomeData('silent');
       } else if (res?.body?.detail === 'User has no goals') {
         setGoalSheetVisible(true);
+      } else if (res?.status === 409) {
+        // A planned session already exists — surface it without error noise
+        showSuccess('Session Ready', 'You already have a planned session waiting.');
       } else {
-        showError('Generation Failed', 'Could not generate a session. Please try again.');
+        // Show the backend's actual detail if available (helpful for debugging
+        // 500s where the session may or may not have been saved server-side).
+        const detail = typeof res?.body?.detail === 'string'
+          ? res.body.detail
+          : 'Could not generate a session. Please try again.';
+        showError('Generation Failed', detail);
       }
     } catch {
       showError('Generation Error', 'An unexpected error occurred.');
     } finally {
       setGenerating(false);
+      // Always re-sync — even on failure, the server may have saved a session
+      // before the response failed to serialize. This ensures the UI reflects
+      // the actual server state instead of showing "Generate" indefinitely.
+      await loadHomeData('silent');
     }
   };
 

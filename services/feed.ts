@@ -21,9 +21,15 @@ export interface FeedSession {
 }
 
 export async function getFeed(): Promise<FeedSession[]> {
-  const { ok, body } = await apiFetch<FeedSession[]>('/api/feed/');
-  if (!ok) throw new Error('Failed to load feed');
-  return body;
+  // After 3 attempts (apiFetch retries), give up gracefully and return [].
+  // Showing an empty feed > throwing a toast every 30s on flaky networks.
+  // The caller can show the empty state and the user can pull-to-refresh.
+  const { ok, body, status } = await apiFetch<FeedSession[]>('/api/feed/');
+  if (!ok) {
+    console.warn(`Feed unavailable (status ${status}) — showing empty state`);
+    return [];
+  }
+  return Array.isArray(body) ? body : [];
 }
 
 export async function reactToSession(sessionId: number, emoji: string = '💪'): Promise<void> {

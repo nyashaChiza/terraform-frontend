@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 
 import { login as loginSvc } from '../../services/auth';
 import { authStore } from '../../store/auth';
+import { apiFetch } from '../../services/api';
 import { showError, showSuccess } from '../../services/toast';
 
 export default function Login() {
@@ -47,7 +48,18 @@ export default function Login() {
         return;
       }
 
-      authStore.set({ token, refresh_token, token_type, user: null });
+      authStore.set({ token, refresh_token, token_type });
+
+      // Fetch the user record immediately so the app starts with a populated
+      // user (including profile_picture_url, username). Without this, every
+      // screen has to refetch /api/users/me independently after login.
+      try {
+        const meRes = await apiFetch<any>('/api/users/me', { method: 'GET' });
+        if (meRes.ok) authStore.set({ user: meRes.body });
+      } catch {
+        // Not fatal — screens will refetch on their own.
+      }
+
       showSuccess('Signed in');
       router.replace('/(tabs)/home');
     } catch (err: any) {

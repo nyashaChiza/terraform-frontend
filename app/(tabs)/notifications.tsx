@@ -49,15 +49,21 @@ export default function NotificationsScreen() {
     if (!quiet) setLoading(true);
     try {
       const data = await getNotifications();
-      setItems(data);
-      // Mark all as read when screen is opened
-      await markAllRead();
+      // Preserve existing notifications if a refresh came back empty due to
+      // a network blip (apiFetch returns [] after retries exhausted).
+      if (data.length > 0 || items.length === 0) setItems(data);
     } catch (err: any) {
-      showError('Error', err?.message ?? 'Could not load notifications');
+      // Service no longer throws on transient failure — this catches genuine bugs
+      console.warn('Notifications load error', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+    // Mark-all-read is best-effort — a failure here shouldn't surface as
+    // "Could not load notifications" since the list already loaded fine.
+    try {
+      await markAllRead();
+    } catch { /* silently ignore — we'll try again next time */ }
   };
 
   useFocusEffect(
